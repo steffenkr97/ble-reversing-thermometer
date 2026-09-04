@@ -81,6 +81,8 @@ class TestHistoryCsv(unittest.TestCase):
         self.assertEqual(rows[0]["source"], SOURCE_HISTORY)
         self.assertEqual(rows[0]["index"], 0)
         self.assertEqual(rows[0]["temp_c"], 24.0625)
+        self.assertEqual(rows[0]["timestamp"], "2025-11-15T12:00:00Z")
+        self.assertEqual(rows[1]["timestamp"], "2025-11-15T12:10:00Z")
 
 
 class TestExtract(unittest.TestCase):
@@ -139,6 +141,7 @@ class TestStore(unittest.TestCase):
         self.assertEqual(overview["live_csv_count"], 1)
         self.assertEqual(overview["history_csv_count"], 1)
         self.assertIn(SOURCE_ADV, overview["sources"])
+        self.assertIn(SOURCE_HISTORY, overview["sources"])
         self.assertIn(SOURCE_HISTORY_CAPTURE, overview["sources"])
         buero = overview["rooms"][0]
         self.assertEqual(buero["name"], "Büro")
@@ -149,6 +152,9 @@ class TestStore(unittest.TestCase):
         self.assertEqual(live["count"], 2)
         hist = store.query(mac="F4:DB:00:00:00:D9", source=SOURCE_HISTORY_CAPTURE)
         self.assertEqual(hist["count"], 3)
+        dumped = store.query(mac="f4:db:00:00:00:d9", source=SOURCE_HISTORY)
+        self.assertEqual(dumped["count"], 2)
+        self.assertEqual(dumped["samples"][0]["timestamp"], "2025-11-15T12:00:00Z")
 
     def test_no_extract(self):
         store = DashStore(

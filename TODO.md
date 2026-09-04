@@ -4,7 +4,7 @@
 
 Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 00 DB F4`.
 
-**Aktuelle Phase:** ADV-Live am Büro-Gerät bestätigt. Dashboard liest CSV + HCI-Belege. Als Nächstes: Live-CSV, dann History-Dump (Phase 6+). Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** History-Dump-CLI ist da (`dump_history.py`). Extract-Export 1586 Samples. Als Nächstes: Live-CSV und Live-GATT-Dump am Büro. Nicht `0x18`/`0x04`.
 
 ---
 
@@ -20,7 +20,7 @@ Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 
 | Encoding von °C / %rF | `/16`; Live: Temp = Display 25,125 °C; Hum ±3 %; Capture Nov 2025 hatte +10 |
 | Collector mit Speichern | Code da; ADV-Scan live OK; CSV-Lauf noch offen |
 | Lokales Dashboard | Code da (`dashboard/server.py`); ohne Live-CSV: HCI-Belege |
-| History-Dump / 5 Geräte | Phase 6–7, noch nicht begonnen |
+| History-Dump / 5 Geräte | Dump-CLI + Extract 1586 Samples; Live-GATT und 5 Räume offen |
 
 Live-CSV = `collect.py` über ADV (kein GATT). GATT-Probe bleibt `read_thermometer_data.py`. `fuzzer.py` nur für bereits beobachtete Kommandos; Blacklist `0x04`, `0x05`, `0xFF`, `0xFE` bleibt unangetastet.
 
@@ -95,16 +95,18 @@ Gerät über MAC / System ID und die Parser-Funktion sind **im Code** erledigt. 
 
 GATT wie die App: CCCD → `1A` → `01` (Sample-Count) → wiederholte `07`-Pages. Nur beobachtete Writes. Beleg: [05-history-07.md](hci-logs/05-history-07.md), Probe: `read_thermometer_data.py`.
 
-History hat **keine Wanduhr** — nur Index (0 = älteste). Zeit fürs Dashboard muss abgeleitet werden (neuestes Sample ≈ jetzt, Intervall aus Count/Live), bis das Intervall belegt ist.
+History hat **keine Wanduhr** — nur Index (0 = älteste). Zeit fürs Dashboard: `timestamp_inferred` (Hypothese 10 min, [10-history-dump.md](hci-logs/10-history-dump.md)).
 
 - [ ] GATT-Probe live am Büro-Gerät: `python collector/read_thermometer_data.py --address f4:db:00:00:00:d9` (`1A` + `01`, Count notieren)
 - [ ] Eine Page: `--history 0` (älteste) und eine Page nahe Count (neueste) gegen aktuelles ADV
-- [ ] Sample-Intervall ableiten (Hypothese: Count vs. ADV-Counter / Zeit zwischen Count-Anstiegen). Nicht als Fakt, bis zwei Zeitpunkte passen
-- [ ] Dump-CLI: alle Pages `07` mit `count=03`, letzte Page ggf. `01` — wie die App, kein Fuzzer
-- [ ] Speichern z. B. `data/history_<mac12>.csv`: `mac, index, record, temp_c, humidity_rh, raw_hex` plus optionales `timestamp_inferred`
-- [ ] Unittest gegen Capture-Goldvektoren (`07` count 03/01), dann ein Live-Dump am Büro-Gerät
+- [x] Sample-Intervall ableiten — **Hypothese 10 min** (ADV-Counter 949579 / Count 1583 ≈ 599,86 s). Nicht Fakt, bis zwei Live-Zeitpunkte passen
+- [x] Dump-CLI: `collector/dump_history.py` — alle Pages `07` mit `count=03`, letzte Page ggf. `01`
+- [x] Speichern `data/history_<mac12>.csv`: `mac, index, record, temp_c, humidity_rh, raw_hex` plus `timestamp_inferred`
+- [x] Unittest gegen Capture-Goldvektoren (`07` count 03/01, Extract 1586 Samples, Page-Plan 1584/1586/820)
+- [x] Extract-Export: `python collector/dump_history.py --from-extract hci-logs/extract` (Capture `15_14_35`, 1586 Samples)
+- [ ] Ein Live-Dump am Büro-Gerät (`dump_history.py --address …`)
 
-**Done, wenn:** ein vollständiger History-Dump des Büro-Geräts lokal liegt und die neueste Page zum Live-ADV passt. Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.
+**Done, wenn:** ein vollständiger History-Dump des Büro-Geräts lokal liegt und die neueste Page zum Live-ADV passt. Code + Capture-Export sind da; Live-GATT offen. Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.
 
 ---
 
@@ -140,9 +142,10 @@ Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-
 - [x] Allowlist `dashboard/rooms.json` (Büro); fremde MACs verworfen
 - [x] Dashboard / Plots (Räume, Verläufe) — `python dashboard/server.py`
 - [ ] Live-CSV am Büro, damit die Quelle `adv` echte Sammelzeiten hat
+- [x] History-CSV aus Dump/Extract plotbar (`dump_history.py`, Quelle `history`)
 - [ ] Optional JSONL / SQLite, wenn 5 Geräte × History unhandlich wird
 
-**Done, wenn:** Live- und History-Dateien ohne Extra-Parsing plotbar sind. UI ist da; Live-CSV und History-Dump am Gerät fehlen noch.
+**Done, wenn:** Live- und History-Dateien ohne Extra-Parsing plotbar sind. UI und History-CSV-Import sind da; Live-CSV und Live-GATT-Dump am Gerät fehlen noch.
 
 ---
 
@@ -164,8 +167,9 @@ Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-
 4. ~~Collector ADV→CSV (Code)~~ — erledigt, [08-collect.md](hci-logs/08-collect.md)
 5. ~~Live-ADV `scan_live.py`~~ — erledigt 2026-09-03, Display = Roh 25,125 °C, [07-read.md](hci-logs/07-read.md)
 6. `python collector/collect.py` → Live-CSV (Büro)
-7. `python dashboard/server.py` → `http://127.0.0.1:8765/` (HCI-Belege schon ohne CSV)
-8. GATT-Probe + History-Dump Büro (Phase 6)
-9. Geräteliste 5 Räume in `dashboard/rooms.json`, dann Live+History für alle (Phase 7)
+7. `python collector/dump_history.py --from-extract hci-logs/extract` → History-CSV (Capture-Beleg)
+8. `python dashboard/server.py` → `http://127.0.0.1:8765/`
+9. GATT-Dump Büro: `python collector/dump_history.py --address f4:db:00:00:00:d9`
+10. Geräteliste 5 Räume in `dashboard/rooms.json`, dann Live+History für alle (Phase 7)
 
 **Nicht** als Nächstes `0x18`/`0x04`.

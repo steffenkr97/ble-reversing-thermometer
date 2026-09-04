@@ -226,7 +226,7 @@ Fuzzer-`0xF3` (`ble_kurz.csv`):
 |------|-----|--------|
 | Temperatur | ADV Offset 12; `07` Offset 6,8,10 (`count=03`) bzw. 6 (`count=01`) | `/16`; Live-Display = Roh; Capture hatte +10 |
 | Luftfeuchtigkeit | ADV Offset 14; `07` Offset 12,14,16 bzw. 8 bei `count=01` | `/16`; Live ±3 % zum Display |
-| Zeit / Sample-Zeit | kein Unix-Timestamp in GATT. ADV-Counter Offset 16 (Hypothese: Sekunden seit Power-On). History-Index ist die Reihenfolge, nicht die Uhr. | Hypothese |
+| Zeit / Sample-Zeit | kein Unix-Timestamp in GATT. ADV-Counter Offset 16 (Hypothese: Sekunden seit Power-On). History-Index ist die Reihenfolge. Dump setzt `timestamp_inferred` mit Hypothese 10 min ([10-history-dump.md](10-history-dump.md)). | Hypothese |
 | Checksum | letzte 2 Byte von `07` immer `00 00` (1800 Frames) | Padding, keine Checksum |
 | Batterie | ADV Offset 10 | mV, Hypothese |
 

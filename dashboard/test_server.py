@@ -99,6 +99,20 @@ class TestHttpApi(unittest.TestCase):
         self.assertEqual(payload["count"], 2)
         self.assertEqual(payload["samples"][0]["temp_c"], 25.125)
 
+    def test_samples_history_csv(self):
+        payload = self._json(
+            "/api/samples?mac=f4:db:00:00:00:d9&source=history"
+        )
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["samples"][0]["index"], 0)
+        self.assertEqual(payload["samples"][0]["temp_c"], 24.0625)
+        self.assertEqual(payload["samples"][0]["timestamp"], "2025-11-15T12:00:00Z")
+
+    def test_overview_history_interval_hypothesis(self):
+        payload = self._json("/api/overview")
+        self.assertEqual(payload["encoding"]["history_interval_sec_hypothesis"], 600)
+        self.assertEqual(payload["history_csv_count"], 1)
+
     def test_bad_source(self):
         payload = self._json("/api/samples?source=nope", status=400)
         self.assertIn("unbekannte source", payload["error"])
