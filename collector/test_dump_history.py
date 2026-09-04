@@ -146,6 +146,44 @@ class TestDumpFromExtractCli(unittest.TestCase):
             parsed0 = parse_fff3(bytes.fromhex(rows[0]["raw_hex"]))
             self.assertEqual(parsed0.index, 0)
 
+    def test_all_rooms_extract_writes_buero_only(self):
+        if not os.path.isfile(os.path.join(EXTRACT_DIR, "att_fff5_fff3.csv")):
+            self.skipTest("hci-logs/extract fehlt")
+        rooms_path = os.path.join(_ROOT, "dashboard", "rooms.json")
+        with tempfile.TemporaryDirectory() as tmp:
+            buf = io.StringIO()
+            err = io.StringIO()
+            with redirect_stdout(buf), redirect_stderr(err):
+                rc = dump_history.main(
+                    [
+                        "--from-extract",
+                        EXTRACT_DIR,
+                        "--all-rooms",
+                        "--rooms",
+                        rooms_path,
+                        "--outdir",
+                        tmp,
+                        "--newest-time",
+                        "2025-11-26T15:19:35Z",
+                    ]
+                )
+            self.assertEqual(rc, 0)
+            buero = os.path.join(tmp, "history_f4db000000d9.csv")
+            self.assertTrue(os.path.isfile(buero))
+            with open(buero, newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 1586)
+            other = os.path.join(tmp, "history_f4d00000021a.csv")
+            self.assertFalse(os.path.isfile(other))
+            self.assertIn("all-rooms", buf.getvalue())
+
+    def test_all_rooms_and_output_conflict(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                dump_history.parse_args(
+                    ["--from-extract", "x", "--all-rooms", "--output", "y.csv"]
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

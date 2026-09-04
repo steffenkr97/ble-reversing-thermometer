@@ -15,6 +15,7 @@ Ohne bleak (nur Lesen der Extracts):
 
 ```
 python collector/dump_history.py --from-extract hci-logs/extract
+python collector/dump_history.py --from-extract hci-logs/extract --all-rooms
 ```
 
 Am Gerät (venv, bleak):
@@ -30,6 +31,8 @@ python collector/dump_history.py --use-system-id
 | `--address` / `-a` | BLE-Adresse. Sequenz wie die App. Unverträglich mit `--from-extract`. |
 | `--use-system-id` | Scan, Ziel nur bei `2A23 == TARGET_SYSTEM_ID`. Standard ohne `--address`/`--from-extract`. |
 | `--mac` | MAC in der CSV (Standard Büro). Extract filtert `peer`. |
+| `--rooms PATH` | Allowlist für `--all-rooms` und System-ID (Standard `dashboard/rooms.json`). |
+| `--all-rooms` | je MAC in der Allowlist eine CSV. Unverträglich mit `--output`. Extract: MACs ohne `07` überspringen. |
 | `--outdir` / `--output` | Standard `data/history_<mac12>.csv` (Dump **ersetzt** die Datei). |
 | `--interval-sec` | Hypothese für `timestamp_inferred`, Standard **600** (10 min). |
 | `--no-timestamps` | Spalte `timestamp_inferred` leer. |
@@ -38,11 +41,13 @@ python collector/dump_history.py --use-system-id
 | `--notify-timeout` | Standard 2 s je Notify (Capture `07` Median 157 ms, Max 449 ms). |
 | `--retries` | Wiederholungen pro Page bei Timeout, Standard 2. |
 
-`--help` braucht kein bleak. Schritt-für-Schritt inkl. erwarteter Ausgabe: [ANLEITUNG.md](../ANLEITUNG.md) (Abschnitte 6–8). Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. `07`-Writes nur 6 Byte, `count` nur `01` oder `03` — nie `02` (in `15_14_35` zwei Rest-Pages `01`).
+`--all-rooms` schreibt je MAC in `rooms.json` eine History-CSV, sofern Pages existieren. In den Nov-2025-Captures nur Büro.
+
+`--help` braucht kein bleak. Schritt-für-Schritt: [ANLEITUNG.md](../ANLEITUNG.md). Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. `07`-Writes nur 6 Byte, `count` nur `01` oder `03` — nie `02`. GATT-System-ID nur gegen den Sollwert in `rooms.json` (Büro), nicht die Büro-`2A23` auf andere MACs.
 
 ## Ablauf Live (Fakt aus Captures)
 
-1. Connect, System-ID prüfen (`D9 00 00 00 00 00 DB F4`)
+1. Connect, System-ID prüfen (Büro: `D9 00 00 00 00 00 DB F4`; andere Allowlist-MACs: Sollwert aus `rooms.json` oder nur Adresse)
 2. `start_notify(FFF3)` plus CCCD `2902` = `01 00`
 3. Write FFF5 `1A` → Status
 4. Write FFF5 `01` → `sample_count` als LE uint16

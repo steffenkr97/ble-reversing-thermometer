@@ -2,15 +2,15 @@
 
 Dieses Repo reverse-engineert das Bluetooth-Protokoll **eigener** ThermoBeacon-Thermometer. Ziel: Live (ADV) und Vergangenheit (GATT `07`) lokal speichern und im Dashboard zeigen — bis zu **5 Räume**. Keine Hersteller-App.
 
-**Aktuelle Phase:** History-Dump (Phase 6): CLI `dump_history.py` — GATT `1A`→`01`→`07` oder `--from-extract`. Dashboard liest Live-CSV + History-CSV + HCI-Belege. Live-CSV am Büro und Live-GATT-Dump noch offen. Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** Phase 7 Allowlist (5 Räume in `rooms.json`). Büro bestätigt + Encoding-Check. Collector schreibt ein Sample je Allowlist-MAC. Büro-MVP-Feldlauf: `mvp_buero.py`. Nicht `0x18`/`0x04`.
 
 ## Auftrag an Agents
 
-1. **Jetzt:** `python collector/dump_history.py --from-extract hci-logs/extract` → `data/history_*.csv`, dann `python dashboard/server.py`. Live-CSV: `python collector/collect.py`. Hum `/16` nur ±3 % zum Display. `0x18` nicht als Offset-Fakt.
-2. **Danach:** Live-GATT-Dump am Büro (`dump_history.py --address …`). Allowlist für 5 eigene MACs in `dashboard/rooms.json`. `0x18` / `0x04` nicht senden.
+1. **Jetzt:** Am Büro `python collector/mvp_buero.py --address f4:db:00:00:00:d9` (Live-CSV + GATT-Dump + Vergleich). Kandidaten in `dashboard/rooms.json` erst nach Display-Check auf `confirmed`/`encoding_checked` setzen. Hum `/16` nur ±3 % zum Display. `0x18` nicht als Offset-Fakt.
+2. **Danach:** Live-GATT-Dump je bestätigter MAC (`dump_history.py --address …` oder `--all-rooms`). `0x18` / `0x04` nicht senden.
 3. **Nicht:** fremde Geräte, Exploits/PoCs, Fuzzer auf destruktive Kommandos, Firmware knacken.
 
-Nur Geräte auf der Allowlist (TODO Phase 7). Unklare Bytes als Hypothese markieren, nicht als Fakt. Encoding-Beleg bleibt das Büro-Gerät, bis Gerät 2–5 gegen Display geprüft sind.
+Nur Geräte auf der Allowlist (`dashboard/rooms.json`). Unklare Bytes als Hypothese markieren, nicht als Fakt. Encoding-Beleg bleibt das Büro-Gerät, bis Gerät 2–5 gegen Display geprüft sind (`encoding_checked`).
 
 ## Zielgerät (Büro)
 
@@ -22,7 +22,7 @@ Nur Geräte auf der Allowlist (TODO Phase 7). Unklare Bytes als Hypothese markie
 | System ID (`2A23`) | `D9 00 00 00 00 00 DB F4` (MAC-Bytes, little-endian) |
 | Kalibrier-Hinweis | Nov 2025: Display 33 °C = **+10**. Live 2026-09-03: Display **= Roh `/16`** (25,125 °C), kein Offset. |
 
-Weitere ThermoBeacons in den Captures — Zugehörigkeit zu den 5 eigenen Räumen in TODO Phase 7 bestätigen. Nicht das erstbeste Gerät nehmen — Allowlist (MAC / System ID).
+Weitere ThermoBeacons in den Captures stehen als Kandidaten in `rooms.json` (`confirmed: false`). Zugehörigkeit bestätigen, nicht das erstbeste Gerät nehmen.
 
 ## Auswertung
 
@@ -40,6 +40,7 @@ Tabellen und Belege stehen in den MDs, nicht doppelt hier:
 | [hci-logs/08-collect.md](hci-logs/08-collect.md) | Phase 4: ADV-Collector, CSV-Spalten, Flags |
 | [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md) | Lokales Dashboard: API, Quellen, Allowlist |
 | [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md) | Phase 6: History-Dump GATT/`--from-extract`, Intervall-Hypothese 10 min |
+| [hci-logs/11-rooms.md](hci-logs/11-rooms.md) | Phase 7: Allowlist 5 Räume, Collector je MAC, Kandidaten |
 | [hci-logs-notes.md](hci-logs-notes.md) | Index + Kalibrier-Hinweis |
 | [ANLEITUNG.md](ANLEITUNG.md) | CLI-Schritte für den Live-Lauf |
 
@@ -49,7 +50,7 @@ Parser: `python collector/parse_btsnoop.py --export hci-logs/extract` (nur Lesen
 
 ```
 py/                                  ältere User-Skripte (Fuzzer, mini, reader, list_system_ids)
-collector/                           Phase-3–6-Code (Parser, ADV-Scan, GATT-Probe, Collector, History-Dump, btsnoop)
+collector/                           Phase-3–7-Code (Parser, ADV-Scan, Collector, History-Dump, Allowlist, mvp_buero)
 dashboard/                           lokales Frontend (CSV + HCI-Extract, kein BLE)
 data/                                Live-CSV (`data/.gitkeep`; `*.csv` in `.gitignore`)
 research-device/                     nRF-Connect-Logs, ältere Doku
@@ -158,10 +159,11 @@ Hypothesen als Tabelle: Offset, Länge, Byte-Order, Skala, Beleg — in den `hci
 Phase-3-Code: [07-read.md](hci-logs/07-read.md). Phase-4-Collector: [08-collect.md](hci-logs/08-collect.md). Encoding: ADV Offset 12/14, History GATT `07`, `int16le / 16`.
 
 - Live ohne Connect: `python collector/scan_live.py` (Payload-MAC `f4:db:00:00:00:d9`)
-- Live-CSV: `python collector/collect.py` (ein Sample) bzw. `python collector/collect.py --interval 60` — nur ADV, kein GATT
+- Live-CSV: `python collector/collect.py` (Allowlist) bzw. `--mac …` für ein Gerät; `--interval 60`
+- Büro-MVP-Feldlauf: `python collector/mvp_buero.py --address …` — Live-CSV + Dump + History vs. ADV
 - Dashboard: `python dashboard/server.py` — `http://127.0.0.1:8765/` (kein bleak, kein GATT)
 - GATT-Probe: `python collector/read_thermometer_data.py --address …` — CCCD, dann `1A` → `01` → optional `--history INDEX`
-- History-Dump: `python collector/dump_history.py --from-extract hci-logs/extract` (offline) bzw. `--address …` (GATT, alle Pages)
+- History-Dump: `python collector/dump_history.py --from-extract hci-logs/extract` (offline) bzw. `--address …` / `--all-rooms`
 - Gerät über MAC oder `--use-system-id` (`2A23`); kein Erstes-Gerät-Fallback
 - Probe bleibt in `read_thermometer_data.py`; Live-CSV ist `collect.py` (ADV); voller History-Dump ist `dump_history.py`. Keine Cloud, keine Hersteller-App
 
@@ -186,8 +188,9 @@ Stack: Python 3.8+, `bleak>=0.21.0` (`requirements.txt`; ohne bleak scheitert `-
 - [x] Live-ADV am Büro-Gerät (`scan_live.py`, Display = Roh 25,125 °C)
 - [x] Lokales Dashboard (CSV + HCI-Beleg, [09-dashboard.md](hci-logs/09-dashboard.md))
 - [x] History-Dump CLI + Extract-Export 1586 Samples ([10-history-dump.md](hci-logs/10-history-dump.md))
-- [ ] Live-CSV `collect.py` am Büro-Gerät
+- [x] Allowlist 5 Einträge in `rooms.json` + Collector je MAC ([11-rooms.md](hci-logs/11-rooms.md)) — 4 Kandidaten unbestätigt
+- [ ] Live-CSV `collect.py` / `mvp_buero.py` am Büro-Gerät (Feld)
 - [ ] History-Dump live am Büro (GATT `07`, alle Pages) — Code da, Gerät offen
-- [ ] Geräteliste 5 Räume + Live/History je MAC — TODO Phase 7
-- [ ] SQLite/JSONL falls 5 Geräte × History unhandlich — Rest Phase 8
-- [ ] `0x18` / `0x04` gegen Kalibrier-Test zuordnen (nicht senden, bis bewusst getestet)
+- [ ] Gerät 2–5: Zugehörigkeit + Display vs. `/16`, dann `confirmed`/`encoding_checked`
+- [ ] SQLite/JSONL — **Parkplatz**, nicht in Release 6.1/7
+- [ ] `0x18` / `0x04` gegen Kalibrier-Test — **Parkplatz**, nicht senden

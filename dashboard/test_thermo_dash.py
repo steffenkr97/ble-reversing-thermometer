@@ -49,6 +49,14 @@ class TestRooms(unittest.TestCase):
         self.assertEqual(len(rooms), 1)
         self.assertEqual(rooms[0]["mac"], "f4:db:00:00:00:d9")
         self.assertEqual(rooms[0]["name"], "Büro")
+        self.assertTrue(rooms[0]["encoding_checked"])
+
+    def test_prod_rooms_five_candidates(self):
+        prod = os.path.join(_HERE, "rooms.json")
+        rooms = load_rooms(prod)
+        self.assertEqual(len(rooms), 5)
+        self.assertTrue(rooms[0]["confirmed"])
+        self.assertFalse(rooms[1]["confirmed"])
 
 
 class TestLiveCsv(unittest.TestCase):
@@ -145,6 +153,7 @@ class TestStore(unittest.TestCase):
         self.assertIn(SOURCE_HISTORY_CAPTURE, overview["sources"])
         buero = overview["rooms"][0]
         self.assertEqual(buero["name"], "Büro")
+        self.assertTrue(buero["encoding_checked"])
         self.assertEqual(buero["counts"][SOURCE_ADV], 2)
         self.assertEqual(buero["latest"]["temp_c"], 25.1875)
 

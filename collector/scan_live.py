@@ -2,17 +2,18 @@
 """Live-Temperatur und Luftfeuchtigkeit aus ADV_IND, ohne GATT-Connect.
 
 Scannt Manufacturer Specific Data (Company-ID 0x001B, 20-Byte-Live-Frame)
-per Bleak. Filter ist die MAC im Payload (TARGET_MAC), nicht der Gerätename.
-Erstes gültiges Sample auf stdout, dann Exit 0.
+per Bleak. Filter ist die Payload-MAC gegen die Allowlist (rooms.json),
+nicht der Gerätename. CLI-Standard: nur Büro-MAC.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -25,6 +26,13 @@ from thermo_parse import (  # noqa: E402
     TARGET_MAC,
     AdvLive,
     parse_adv_manufacturer,
+)
+from thermo_rooms import (  # noqa: E402
+    DEFAULT_ROOMS_PATH,
+    allowlist_macs,
+    load_rooms,
+    mac_in_allowlist,
+    normalize_mac,
 )
 
 
@@ -81,20 +89,75 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
             "(Windows/Linux: MAC, macOS: UUID). Payload-MAC bleibt Pflicht."
         ),
     )
+    parser.add_argument(
+        "--mac",
+        default=TARGET_MAC,
+        metavar="MAC",
+        help="Payload-MAC (Standard: Büro {}). Muss auf der Allowlist stehen.".format(
+            TARGET_MAC
+        ),
+    )
+    parser.add_argument(
+        "--rooms",
+        default=DEFAULT_ROOMS_PATH,
+        metavar="PATH",
+        help="Allowlist rooms.json (Standard: dashboard/rooms.json)",
+    )
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("--timeout muss größer als 0 sein")
     return args
 
 
+def _allowed_from_rooms(rooms_path: str, mac: Optional[str]) -> List[str]:
+    rooms = load_rooms(rooms_path)
+    allowed = allowlist_macs(rooms)
+    if not allowed:
+        allowed = [TARGET_MAC]
+    if mac:
+        want = normalize_mac(mac)
+        if not mac_in_allowlist(want, allowed):
+            raise ValueError(
+                "MAC {} steht nicht in der Allowlist ({})".format(want, rooms_path)
+            )
+        return [want]
+    return allowed
+
+
 async def scan_live(
-    timeout: float, address: Optional[str] = None
+    timeout: float,
+    address: Optional[str] = None,
+    allowed_macs: Optional[Iterable[str]] = None,
 ) -> Optional[AdvLive]:
     """Erstes gültiges AdvLive oder None nach Timeout."""
+    found = await scan_live_many(
+        timeout, allowed_macs=allowed_macs, address=address, stop_after=1
+    )
+    if not found:
+        return None
+    return next(iter(found.values()))
+
+
+async def scan_live_many(
+    timeout: float,
+    allowed_macs: Optional[Iterable[str]] = None,
+    address: Optional[str] = None,
+    stop_after: Optional[int] = None,
+) -> Dict[str, AdvLive]:
+    """Ein Sample je Allowlist-MAC, bis Timeout oder stop_after Treffer.
+
+    allowed_macs None = nur Büro-TARGET_MAC (wie bisher).
+    """
+    wanted = [normalize_mac(m) for m in allowed_macs] if allowed_macs is not None else [
+        TARGET_MAC
+    ]
+    if not wanted:
+        return {}
     loop = asyncio.get_running_loop()
     done = asyncio.Event()
-    found: List[AdvLive] = []
+    found: Dict[str, AdvLive] = {}
     want_addr = address.lower() if address else None
+    target_n = len(wanted) if stop_after is None else min(int(stop_after), len(wanted))
 
     def on_detect(device, advertisement_data) -> None:
         if done.is_set():
@@ -106,11 +169,14 @@ async def scan_live(
             frame = assemble_mfg_frame(company_id, payload)
             if frame is None:
                 continue
-            live = parse_adv_manufacturer(frame)
+            live = parse_adv_manufacturer(frame, allowed_macs=wanted)
             if live is None:
                 continue
-            found.append(live)
-            loop.call_soon_threadsafe(done.set)
+            if live.mac in found:
+                return
+            found[live.mac] = live
+            if len(found) >= target_n:
+                loop.call_soon_threadsafe(done.set)
             return
 
     scanner = BleakScanner(detection_callback=on_detect)
@@ -118,23 +184,30 @@ async def scan_live(
     try:
         await asyncio.wait_for(done.wait(), timeout=timeout)
     except asyncio.TimeoutError:
-        return None
+        pass
     finally:
         await scanner.stop()
-    return found[0] if found else None
+    return found
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     try:
-        live = asyncio.run(scan_live(timeout=args.timeout, address=args.address))
+        allowed = _allowed_from_rooms(args.rooms, args.mac)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    try:
+        live = asyncio.run(
+            scan_live(timeout=args.timeout, address=args.address, allowed_macs=allowed)
+        )
     except KeyboardInterrupt:
         print("Abgebrochen.", file=sys.stderr)
         return 1
     if live is None:
         print(
-            "Kein Live-Sample innerhalb von {0} s (Ziel-MAC {1}).".format(
-                args.timeout, TARGET_MAC
+            "Kein Live-Sample innerhalb von {0} s (Allowlist {1}).".format(
+                args.timeout, ", ".join(allowed)
             ),
             file=sys.stderr,
         )

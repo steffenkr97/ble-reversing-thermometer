@@ -3,7 +3,7 @@
 Reiner ThermoBeacon-Parser (kein BLE). Encoding: int16le / 16.
 """
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union
 
 TARGET_MAC = "f4:db:00:00:00:d9"
 TARGET_SYSTEM_ID = bytes.fromhex("D90000000000DBF4")
@@ -70,14 +70,27 @@ def _mac_le_to_str(mac_le: bytes) -> str:
     return ":".join("{:02x}".format(b) for b in reversed(mac_le))
 
 
-def _target_mac_le() -> bytes:
-    parts = TARGET_MAC.split(":")
-    return bytes(int(p, 16) for p in reversed(parts))
+def _mac_compact(mac: str) -> str:
+    return (mac or "").replace(":", "").replace("-", "").replace(".", "").lower()
 
 
-def parse_adv_manufacturer(mfg: bytes) -> Optional[AdvLive]:
+def _mac_allowed(mac: str, allowed_macs: Optional[Iterable[str]]) -> bool:
+    """None = nur Büro-TARGET_MAC (HCI-Beleg). Iterable = Allowlist."""
+    compact = _mac_compact(mac)
+    if allowed_macs is None:
+        return compact == _mac_compact(TARGET_MAC)
+    wanted = {_mac_compact(item) for item in allowed_macs}
+    return compact in wanted
+
+
+def parse_adv_manufacturer(
+    mfg: bytes, allowed_macs: Optional[Iterable[str]] = None
+) -> Optional[AdvLive]:
     """
     20-Byte-Live-ADV parsen. 22-Byte-Min/Max, fremde Company/MAC → None.
+
+    Ohne allowed_macs nur Büro (Encoding-Beleg). Collector übergibt die
+    rooms.json-Allowlist; Capture-ADV im Dashboard nur encoding_checked.
     """
     if len(mfg) != _ADV_LIVE_LEN:
         return None
@@ -85,7 +98,10 @@ def parse_adv_manufacturer(mfg: bytes) -> Optional[AdvLive]:
     if company != COMPANY_ID:
         return None
     mac_le = mfg[4:10]
-    if len(mac_le) != _MAC_LEN or mac_le != _target_mac_le():
+    if len(mac_le) != _MAC_LEN:
+        return None
+    mac = _mac_le_to_str(mac_le)
+    if not _mac_allowed(mac, allowed_macs):
         return None
     battery_mv = int.from_bytes(mfg[10:12], "little", signed=False)
     temp_c = i16le_div16(mfg, 12)
@@ -96,7 +112,7 @@ def parse_adv_manufacturer(mfg: bytes) -> Optional[AdvLive]:
         humidity_rh=humidity_rh,
         battery_mv=battery_mv,
         counter=counter,
-        mac=_mac_le_to_str(mac_le),
+        mac=mac,
         raw_hex=mfg.hex(),
     )
 

@@ -84,9 +84,8 @@ h2 { font-size: 22px; }
   color: inherit;
 }
 
-.room.active {
-  border-color: var(--ink);
-  outline: 1px solid var(--ink);
+.room.candidate {
+  border-style: dashed;
 }
 
 .room .name {

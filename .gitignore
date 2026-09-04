@@ -1,4 +1,5 @@
 data/*.csv
+data/*.jsonl
 .venv/
 py/__pycache__/
 collector/__pycache__/

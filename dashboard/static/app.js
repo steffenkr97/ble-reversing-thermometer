@@ -97,16 +97,25 @@
     }
     rooms.forEach(function (room) {
       var btn = document.createElement("button");
-      btn.className = "room" + (room.id === state.roomId ? " active" : "");
+      btn.className =
+        "room" +
+        (room.id === state.roomId ? " active" : "") +
+        (room.confirmed ? "" : " candidate");
       btn.type = "button";
       var latest = room.latest;
       var temp = latest ? fmtNum(latest.temp_c, 3) : "—";
       var hum = latest ? fmtNum(latest.humidity_rh, 2) : "—";
       var liveN = room.counts.adv || 0;
-      var status =
-        liveN > 0
-          ? liveN + " Live-Samples"
-          : "Noch keine Live-CSV — Capture-Beleg verfügbar";
+      var status;
+      if (!room.confirmed) {
+        status = "Kandidat — Zugehörigkeit bestätigen, Display vs. /16";
+      } else if (!room.encoding_checked) {
+        status = "Encoding /16 noch nicht gegen Display geprüft";
+      } else if (liveN > 0) {
+        status = liveN + " Live-Samples";
+      } else {
+        status = "Noch keine Live-CSV — Capture-Beleg verfügbar";
+      }
       btn.innerHTML =
         '<p class="name"></p><p class="mac"></p>' +
         '<div class="readout">' +
@@ -139,7 +148,7 @@
       live +
       " Live-CSV · " +
       (ov.sample_count || 0) +
-      " Punkte gesamt<br>Büro-Allowlist, Encoding int16le / 16";
+      " Punkte gesamt<br>Allowlist rooms.json · Encoding int16le / 16";
   }
 
   function renderTabs() {

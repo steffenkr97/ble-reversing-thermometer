@@ -4,7 +4,42 @@
       "id": "buero",
       "name": "Büro",
       "mac": "f4:db:00:00:00:d9",
-      "confirmed": true
+      "system_id": "D90000000000DBF4",
+      "confirmed": true,
+      "encoding_checked": true,
+      "note": "Protokoll-Beleg. Live 2026-09-03: Display = Roh /16."
+    },
+    {
+      "id": "kandidat-021a",
+      "name": "Kandidat 2",
+      "mac": "f4:d0:00:00:02:1a",
+      "confirmed": false,
+      "encoding_checked": false,
+      "note": "HCI-Scan, Name ThermoBeacon. Zugehörigkeit bestätigen, dann Display vs. /16."
+    },
+    {
+      "id": "kandidat-0237",
+      "name": "Kandidat 3",
+      "mac": "f4:db:00:00:02:37",
+      "confirmed": false,
+      "encoding_checked": false,
+      "note": "HCI-Scan. Zugehörigkeit bestätigen, dann Display vs. /16."
+    },
+    {
+      "id": "kandidat-0242",
+      "name": "Kandidat 4",
+      "mac": "f4:db:00:00:02:42",
+      "confirmed": false,
+      "encoding_checked": false,
+      "note": "HCI-Scan. Zugehörigkeit bestätigen, dann Display vs. /16."
+    },
+    {
+      "id": "kandidat-0f1f",
+      "name": "Kandidat 5",
+      "mac": "62:53:00:00:0f:1f",
+      "confirmed": false,
+      "encoding_checked": false,
+      "note": "HCI-Scan, anderes Company-Präfix — extra prüfen. Nicht als eigenes Gerät annehmen."
     }
   ]
 }

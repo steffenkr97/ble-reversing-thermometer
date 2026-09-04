@@ -107,9 +107,25 @@ Dann: Gerät näher, Bluetooth neu, App zu, Timeout 30. Unter Windows fehlt Manu
 
 ---
 
-Scan 2026-09-03 ist durch (MAC, Temp, Hum passen). Als Nächstes CSV:
+Scan 2026-09-03 ist durch (MAC, Temp, Hum passen). Büro-MVP in einem Rutsch:
+
+```
+python collector/mvp_buero.py --address f4:db:00:00:00:d9
+```
+
+Das schreibt Live-CSV, holt History per GATT, vergleicht die neueste Page mit ADV und hängt `data/interval_evidence.jsonl` an. Zweiter Lauf (später, anderer Count) prüft die 10-min-Hypothese. Nicht senden: `0x18` / `0x04`.
+
+Oder die Schritte einzeln:
 
 ## 3. Ein Sample in CSV
+
+Nur Büro:
+
+```
+python collector/collect.py --mac f4:db:00:00:00:d9
+```
+
+Alle Allowlist-MACs (ein Sample je Treffer, je eigene CSV):
 
 ```
 python collector/collect.py
@@ -161,9 +177,9 @@ python dashboard/server.py
 
 Browser: `http://127.0.0.1:8765/`
 
-Ohne Live-CSV und ohne History-CSV zeigt die Seite die HCI-Belege vom Büro (Capture-ADV und History-Capture `07`). Nach Schritt 3 erscheint **Live-CSV (ADV)** zuerst. Nach Schritt 6 erscheint der Tab **History-CSV**. Allowlist: `dashboard/rooms.json`. Nicht senden, kein GATT.
+Ohne Live-CSV und ohne History-CSV zeigt die Seite die HCI-Belege vom Büro (Capture-ADV und History-Capture `07`). Nach Schritt 3 erscheint **Live-CSV (ADV)** zuerst. Nach Schritt 6 erscheint der Tab **History-CSV**. Allowlist: `dashboard/rooms.json` (Büro bestätigt, vier Kandidaten gestrichelt). Capture-ADV nur Büro, bis Gerät 2–5 gegen Display geprüft sind (`encoding_checked`). Nicht senden, kein GATT.
 
-Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md).
+Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md), [hci-logs/11-rooms.md](hci-logs/11-rooms.md).
 
 ---
 
@@ -178,8 +194,10 @@ python collector/dump_history.py --help
 ```
 
 ```
-python collector/dump_history.py --from-extract hci-logs/extract
+python collector/dump_history.py --from-extract hci-logs/extract --all-rooms
 ```
+
+schreibt History-CSV je MAC, für die der Extract `07`-Pages hat (in den Captures nur Büro).
 
 ### Ausgabe lesen
 
