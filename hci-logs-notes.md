@@ -18,4 +18,5 @@ Captures liegen unter `hci-logs/*.cfa` (Android-btsnoop, OnePlus 5T), nicht unte
 | [06-encoding.md](hci-logs/06-encoding.md) | Phase 2: Paare, Payloads, Skala `/16` gegen Display |
 | [07-read.md](hci-logs/07-read.md) | Phase 3: Parser, `scan_live.py`, GATT-Probe; ADV-Live 2026-09-03 |
 | [08-collect.md](hci-logs/08-collect.md) | Phase 4: ADV-Collector `collect.py` → CSV; CSV-Lauf noch offen |
+| [09-dashboard.md](hci-logs/09-dashboard.md) | Lokales Dashboard (CSV + HCI-Beleg), kein BLE |
 | [extract/](hci-logs/extract/) | CSV-Rohdumps aus `collector/parse_btsnoop.py` (inkl. `pairs.csv`) |

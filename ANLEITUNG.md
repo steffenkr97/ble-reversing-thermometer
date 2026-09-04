@@ -145,6 +145,22 @@ Timeout im Loop: nur Meldung auf stderr, Skript läuft weiter.
 
 ---
 
+## 5. Dashboard (lokal, kein BLE)
+
+Kein venv/bleak nötig. Im Repo-Ordner:
+
+```
+python dashboard/server.py
+```
+
+Browser: `http://127.0.0.1:8765/`
+
+Ohne Live-CSV zeigt die Seite die HCI-Belege vom Büro (Capture-ADV und History `07`). Nach Schritt 3 erscheint die Quelle **Live-CSV (ADV)**. Allowlist: `dashboard/rooms.json`. Nicht senden, kein GATT.
+
+Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md).
+
+---
+
 ## Noch nicht
 
 GATT und Extra-Cmds erst, wenn Scan + CSV stimmen:
