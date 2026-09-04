@@ -161,9 +161,30 @@ Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md).
 
 ---
 
+## 6. History-Dump
+
+Captures offline (kein BLE, 1586 Samples aus `15_14_35`):
+
+```
+python collector/dump_history.py --from-extract hci-logs/extract
+```
+
+schreibt `data/history_f4db000000d9.csv`. Dashboard-Tab **History-CSV**.  
+`timestamp_inferred` ist **Hypothese 10 min**, keine Geräteuhr. Details: [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md).
+
+Am Büro-Gerät (gleiche Sequenz wie die App: `1A` → `01` → alle `07`-Pages):
+
+```
+python collector/dump_history.py --address f4:db:00:00:00:d9
+```
+
+Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.
+
+---
+
 ## Noch nicht
 
-GATT und Extra-Cmds erst, wenn Scan + CSV stimmen:
+GATT-Probe einzeln (eine Page):
 
 ```
 python collector/read_thermometer_data.py --address f4:db:00:00:00:d9

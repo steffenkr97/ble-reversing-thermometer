@@ -2,12 +2,12 @@
 
 Dieses Repo reverse-engineert das Bluetooth-Protokoll **eigener** ThermoBeacon-Thermometer. Ziel: Live (ADV) und Vergangenheit (GATT `07`) lokal speichern und im Dashboard zeigen — bis zu **5 Räume**. Keine Hersteller-App.
 
-**Aktuelle Phase:** Lokales Dashboard liest Live-CSV + HCI-Belege ([09-dashboard.md](hci-logs/09-dashboard.md)). Live-CSV am Büro noch offen, dann History-Dump (Phase 6–7). Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** History-Dump (Phase 6): CLI `dump_history.py` — GATT `1A`→`01`→`07` oder `--from-extract`. Dashboard liest Live-CSV + History-CSV + HCI-Belege. Live-CSV am Büro und Live-GATT-Dump noch offen. Nicht `0x18`/`0x04`.
 
 ## Auftrag an Agents
 
-1. **Jetzt:** `python collector/collect.py` (venv) — Live-CSV, dann `python dashboard/server.py`. Hum `/16` nur ±3 % zum Display. `0x18` nicht als Offset-Fakt.
-2. **Danach:** History-Dump nur mit App-Sequenz `1A` → `01` → `07`-Pages. Dann Allowlist für 5 eigene MACs in `dashboard/rooms.json`. `0x18` / `0x04` nicht senden.
+1. **Jetzt:** `python collector/dump_history.py --from-extract hci-logs/extract` → `data/history_*.csv`, dann `python dashboard/server.py`. Live-CSV: `python collector/collect.py`. Hum `/16` nur ±3 % zum Display. `0x18` nicht als Offset-Fakt.
+2. **Danach:** Live-GATT-Dump am Büro (`dump_history.py --address …`). Allowlist für 5 eigene MACs in `dashboard/rooms.json`. `0x18` / `0x04` nicht senden.
 3. **Nicht:** fremde Geräte, Exploits/PoCs, Fuzzer auf destruktive Kommandos, Firmware knacken.
 
 Nur Geräte auf der Allowlist (TODO Phase 7). Unklare Bytes als Hypothese markieren, nicht als Fakt. Encoding-Beleg bleibt das Büro-Gerät, bis Gerät 2–5 gegen Display geprüft sind.
@@ -39,6 +39,7 @@ Tabellen und Belege stehen in den MDs, nicht doppelt hier:
 | [hci-logs/07-read.md](hci-logs/07-read.md) | Phase 3: Parser-API, CLIs, Goldvektoren, ADV-Live 2026-09-03 |
 | [hci-logs/08-collect.md](hci-logs/08-collect.md) | Phase 4: ADV-Collector, CSV-Spalten, Flags |
 | [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md) | Lokales Dashboard: API, Quellen, Allowlist |
+| [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md) | Phase 6: History-Dump GATT/`--from-extract`, Intervall-Hypothese 10 min |
 | [hci-logs-notes.md](hci-logs-notes.md) | Index + Kalibrier-Hinweis |
 | [ANLEITUNG.md](ANLEITUNG.md) | CLI-Schritte für den Live-Lauf |
 
@@ -48,12 +49,12 @@ Parser: `python collector/parse_btsnoop.py --export hci-logs/extract` (nur Lesen
 
 ```
 py/                                  ältere User-Skripte (Fuzzer, mini, reader, list_system_ids)
-collector/                           Phase-3/4-Code (Parser, ADV-Scan, GATT-Probe, Collector, btsnoop)
+collector/                           Phase-3–6-Code (Parser, ADV-Scan, GATT-Probe, Collector, History-Dump, btsnoop)
 dashboard/                           lokales Frontend (CSV + HCI-Extract, kein BLE)
 data/                                Live-CSV (`data/.gitkeep`; `*.csv` in `.gitignore`)
 research-device/                     nRF-Connect-Logs, ältere Doku
 hci-logs/                            Android HCI-Snoop (.cfa = btsnoop) + Auswertung
-  01-sessions.md … 08-collect.md  Befund-MDs
+  01-sessions.md … 10-history-dump.md  Befund-MDs
   extract/                           CSV aus parse_btsnoop.py
   hci_snoop_2025_11_26_14_52_44.cfa  Einstiegs-Capture (App-Sync, History)
   hci_snoop_2025_11_26_15_00_04.cfa  langer History-Dump
@@ -160,8 +161,9 @@ Phase-3-Code: [07-read.md](hci-logs/07-read.md). Phase-4-Collector: [08-collect.
 - Live-CSV: `python collector/collect.py` (ein Sample) bzw. `python collector/collect.py --interval 60` — nur ADV, kein GATT
 - Dashboard: `python dashboard/server.py` — `http://127.0.0.1:8765/` (kein bleak, kein GATT)
 - GATT-Probe: `python collector/read_thermometer_data.py --address …` — CCCD, dann `1A` → `01` → optional `--history INDEX`
+- History-Dump: `python collector/dump_history.py --from-extract hci-logs/extract` (offline) bzw. `--address …` (GATT, alle Pages)
 - Gerät über MAC oder `--use-system-id` (`2A23`); kein Erstes-Gerät-Fallback
-- Probe bleibt in `read_thermometer_data.py`; Live-CSV ist `collect.py` (ADV), keine zweite GATT-Sequenz. Keine Cloud, keine Hersteller-App
+- Probe bleibt in `read_thermometer_data.py`; Live-CSV ist `collect.py` (ADV); voller History-Dump ist `dump_history.py`. Keine Cloud, keine Hersteller-App
 
 Stack: Python 3.8+, `bleak>=0.21.0` (`requirements.txt`; ohne bleak scheitert `--help` der CLIs). `fuzzer.py` nur für gezielte, bereits beobachtete Kommandos.
 
@@ -183,8 +185,9 @@ Stack: Python 3.8+, `bleak>=0.21.0` (`requirements.txt`; ohne bleak scheitert `-
 - [x] Collector-Skript im Code (`collect.py` ADV→CSV, [08-collect.md](hci-logs/08-collect.md))
 - [x] Live-ADV am Büro-Gerät (`scan_live.py`, Display = Roh 25,125 °C)
 - [x] Lokales Dashboard (CSV + HCI-Beleg, [09-dashboard.md](hci-logs/09-dashboard.md))
+- [x] History-Dump CLI + Extract-Export 1586 Samples ([10-history-dump.md](hci-logs/10-history-dump.md))
 - [ ] Live-CSV `collect.py` am Büro-Gerät
-- [ ] History-Dump Büro (GATT `07`, alle Pages) — TODO Phase 6
+- [ ] History-Dump live am Büro (GATT `07`, alle Pages) — Code da, Gerät offen
 - [ ] Geräteliste 5 Räume + Live/History je MAC — TODO Phase 7
 - [ ] SQLite/JSONL falls 5 Geräte × History unhandlich — Rest Phase 8
 - [ ] `0x18` / `0x04` gegen Kalibrier-Test zuordnen (nicht senden, bis bewusst getestet)

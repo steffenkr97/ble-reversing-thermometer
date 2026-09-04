@@ -11,10 +11,11 @@
 
   var SOURCE_HINTS = {
     adv: "Sammelzeit UTC aus collect.py. Eine Zeile = ein ADV-Sample.",
-    history: "GATT-History-Dump. X = Sample-Index (0 = älteste), keine Wanduhr.",
+    history:
+      "GATT-History-Dump (dump_history.py). Zeit = Hypothese 10 min, sonst Index 0 = älteste.",
     adv_capture: "HCI-Beleg ADV_IND, nur Allowlist. Kein Live-Collector.",
     history_capture:
-      "HCI-Beleg GATT 07. Index 0 = älteste. Mehrere Captures auf denselben Index: erstes Vorkommen.",
+      "HCI-Beleg GATT 07. Index 0 = älteste. Capture-Zeit ist Dump-Zeit, nicht Gerätezeit.",
   };
 
   var state = {
@@ -181,19 +182,38 @@
       .join("");
   }
 
+  function historyUsesTime(samples) {
+    if (state.source !== "history") return false;
+    for (var i = 0; i < samples.length; i++) {
+      if (samples[i].timestamp) return true;
+    }
+    return false;
+  }
+
   function xValue(sample, i) {
-    if (state.source === "history" || state.source === "history_capture") {
+    if (state.source === "history_capture") {
+      return sample.index == null ? i : sample.index;
+    }
+    if (state.source === "history" && !historyUsesTime(state.samples)) {
       return sample.index == null ? i : sample.index;
     }
     if (sample.timestamp) {
       var t = Date.parse(sample.timestamp.replace(/Z$/, "+00:00"));
       if (!Number.isNaN(t)) return t;
     }
+    if (state.source === "history" && sample.index != null) return sample.index;
     return i;
   }
 
   function xLabel(sample, i) {
-    if (state.source === "history" || state.source === "history_capture") {
+    if (state.source === "history_capture") {
+      return "Index " + (sample.index == null ? i : sample.index);
+    }
+    if (state.source === "history") {
+      if (sample.timestamp) {
+        var idx = sample.index == null ? "" : " · Index " + sample.index;
+        return fmtTime(sample.timestamp) + idx;
+      }
       return "Index " + (sample.index == null ? i : sample.index);
     }
     return fmtTime(sample.timestamp);
@@ -371,10 +391,16 @@
     var samples = state.samples.slice().reverse().slice(0, 80);
     body.innerHTML = samples
       .map(function (s, i) {
-        var when =
-          state.source === "history" || state.source === "history_capture"
-            ? "Index " + (s.index == null ? "—" : s.index)
-            : fmtTime(s.timestamp);
+        var when;
+        if (state.source === "history_capture") {
+          when = "Index " + (s.index == null ? "—" : s.index);
+        } else if (state.source === "history" && s.timestamp) {
+          when = fmtTime(s.timestamp);
+        } else if (state.source === "history") {
+          when = "Index " + (s.index == null ? "—" : s.index);
+        } else {
+          when = fmtTime(s.timestamp);
+        }
         return (
           "<tr><td>" +
           when +
@@ -399,7 +425,7 @@
     if (!payload.samples || !payload.samples.length) {
       empty.hidden = false;
       empty.textContent =
-        "Keine Daten für diese Quelle. Live: python collector/collect.py — History-Dump ist Phase 6.";
+        "Keine Daten für diese Quelle. Live: python collector/collect.py — History: python collector/dump_history.py --from-extract hci-logs/extract";
     } else {
       empty.hidden = true;
     }

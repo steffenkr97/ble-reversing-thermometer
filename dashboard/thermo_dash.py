@@ -549,12 +549,16 @@ class DashStore:
                 "scale": 16,
                 "temp": "int16le / 16 → °C",
                 "humidity": "int16le / 16 → %rF (Display ±3 %, nicht exakt)",
-                "history_clock": "History hat keine Wanduhr; X = Sample-Index (0 = älteste)",
+                "history_clock": (
+                    "Keine Geräte-Wanduhr. timestamp_inferred = Hypothese 10 min "
+                    "(ADV-Counter/Count ≈ 600 s); sonst X = Sample-Index (0 = älteste)."
+                ),
+                "history_interval_sec_hypothesis": 600,
             },
             "notes": [
                 "Nur Allowlist (rooms.json). Keine fremden MACs.",
-                "Live-CSV = collect.py über ADV. History-Capture = HCI-Extract 07, Beleg.",
-                "Hum /16 intern; Live ±3 % zum Display. Capture Nov 2025 hatte Display-Offset +10.",
+                "Live-CSV = collect.py über ADV. History-CSV = dump_history.py (GATT 07 oder Extract).",
+                "History-Capture = HCI-Extract 07, Beleg. Hum /16 intern; Live ±3 % zum Display.",
             ],
         }
 

@@ -2,7 +2,7 @@
 
 **Gerät (Allowlist):** `f4:db:00:00:00:d9` (Büro)  
 **Code:** `dashboard/server.py`, `dashboard/thermo_dash.py`, `dashboard/static/`  
-**Tests:** `python -m unittest discover -s dashboard -p "test_*.py"` — 23 Tests  
+**Tests:** `python -m unittest discover -s dashboard -p "test_*.py"` — 25 Tests  
 **Encoding:** unverändert `int16le / 16` ([06-encoding.md](06-encoding.md), [08-collect.md](08-collect.md))
 
 Kein BLE, kein GATT, keine Cloud. Der Server **liest** nur: Live-CSV aus `data/`, optionale History-CSV, und die schon exportierten HCI-Extracts. Es gibt keine Writes auf `FFF5`.
@@ -37,11 +37,11 @@ Ohne Live-CSV (Collector noch nicht gelaufen) zeigt die UI die **HCI-Belege** vo
 | `source` | Datei | X-Achse | Status |
 |----------|-------|---------|--------|
 | `adv` | `data/thermo_<mac12>_<YYYY-MM-DD>.csv` | `timestamp` UTC (Sammelzeit) | Live, sobald Collector läuft |
-| `history` | `data/history_<mac12>.csv` | `index` (0 = älteste) | Phase 6, noch keine Live-Dumps |
+| `history` | `data/history_<mac12>.csv` | `timestamp_inferred` wenn gesetzt, sonst `index` | Phase 6: `dump_history.py` (GATT oder `--from-extract`) |
 | `adv_capture` | `hci-logs/extract/adv.csv` | Capture-Zeit | Beleg, nur Allowlist + `parse_adv_manufacturer` |
 | `history_capture` | `hci-logs/extract/att_fff5_fff3.csv` | Sample-Index | Beleg GATT `07`; Duplikate über Captures: erstes Vorkommen pro `(mac, index)` |
 
-History hat **keine Wanduhr**. Die Capture-Zeitstempel in `history_capture` sind Dump-Zeit, nicht Gerätezeit — die UI nutzt den Index.
+History hat **keine Geräte-Wanduhr**. `timestamp_inferred` ist Hypothese **10 min** (ADV-Counter/Count ≈ 600 s) — [10-history-dump.md](10-history-dump.md). Die Capture-Zeitstempel in `history_capture` sind Dump-Zeit, nicht Gerätezeit — die UI nutzt dort den Index.
 
 `parse_adv_manufacturer` bleibt auf die Büro-MAC begrenzt. Capture-ADV anderer MACs erscheint deshalb nicht, auch wenn sie später in `rooms.json` stehen, bis der Parser gegen Display geprüft ist.
 
@@ -62,11 +62,11 @@ Sample-JSON:
 timestamp, mac, temp_c, humidity_rh, source, raw_hex, index, record, room, file
 ```
 
-Live-Spalten bleiben die Collector-Spalten ([08-collect.md](08-collect.md)). History-CSV (wenn vorhanden): `mac, index, record, temp_c, humidity_rh, raw_hex` plus optionales `timestamp_inferred`.
+Live-Spalten bleiben die Collector-Spalten ([08-collect.md](08-collect.md)). History-CSV: `mac, index, record, temp_c, humidity_rh, raw_hex` plus optionales `timestamp_inferred` ([10-history-dump.md](10-history-dump.md)).
 
 ## UI
 
-Eine Seite, kein Build, kein npm. Canvas-Chart (Temperatur + Luftfeuchtigkeit), Raumkarten, Quellen-Tabs, Tabelle. Auto-Auswahl: Live-CSV wenn Zeilen da sind, sonst History-Capture.
+Eine Seite, kein Build, kein npm. Canvas-Chart (Temperatur + Luftfeuchtigkeit), Raumkarten, Quellen-Tabs, Tabelle. Auto-Auswahl: Live-CSV wenn Zeilen da sind, sonst History-CSV, sonst History-Capture.
 
 Hum `/16` intern, Live ±3 % zum Display — in der Fußzeile, nicht als exakte Display-Kopie.
 

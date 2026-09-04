@@ -88,3 +88,5 @@ Bei `count=01` liegen Temp/Hum als **ein Paar** bei Offset 6 und 8 (nicht 6 und 
 Intern konsistent mit Advertising. Display 33 °C / Offset +10: ADV-Live `/16` = 22,06 °C (erwartet ~23). **%rF nicht gegen eine notierte Anzeige geprüft**; `/10` für Hum ist ausgeschlossen (>100 % in den meisten ADV-Frames). Abgleich: [06-encoding.md](06-encoding.md).
 
 Fuzzer-`0xF3` enthielt `7B 01` und `BC 03` — dieselben Rohwerte wie Record 1 der ersten History-Page, anderes Framing. Nicht in der App.
+
+Dump aller Pages: [10-history-dump.md](10-history-dump.md). Intervall **10 min** ist Hypothese (ADV-Counter 949579 / Count 1583 ≈ 599,86 s), kein Fakt.
