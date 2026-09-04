@@ -1,4 +1,4 @@
-# Live am Büro-Gerät — Befehle und Auslesen
+# Büro-Gerät — Live, History-Dump und Dashboard
 
 Gerät: `f4:db:00:00:00:d9` (Windows: diese MAC).  
 Hersteller-App währenddessen **nicht** verbunden. Bluetooth am PC an.
@@ -47,6 +47,12 @@ python collector/scan_live.py --help
 
 `--help` muss die Flags zeigen, nicht `No module named 'bleak'`.  
 `.venv` nicht committen.
+
+History aus den Captures (Schritt 6) braucht **kein** bleak:
+
+```
+python collector/dump_history.py --help
+```
 
 ---
 
@@ -155,39 +161,135 @@ python dashboard/server.py
 
 Browser: `http://127.0.0.1:8765/`
 
-Ohne Live-CSV zeigt die Seite die HCI-Belege vom Büro (Capture-ADV und History `07`). Nach Schritt 3 erscheint die Quelle **Live-CSV (ADV)**. Allowlist: `dashboard/rooms.json`. Nicht senden, kein GATT.
+Ohne Live-CSV und ohne History-CSV zeigt die Seite die HCI-Belege vom Büro (Capture-ADV und History-Capture `07`). Nach Schritt 3 erscheint **Live-CSV (ADV)** zuerst. Nach Schritt 6 erscheint der Tab **History-CSV**. Allowlist: `dashboard/rooms.json`. Nicht senden, kein GATT.
 
 Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md).
 
 ---
 
-## 6. History-Dump
+## 6. History aus den Captures (kein BLE)
 
-Captures offline (kein BLE, 1586 Samples aus `15_14_35`):
+Die Geräte speichern den Verlauf intern (Hersteller: bis ~100 Tage; in den Nov-2025-Captures **1586 Samples**, ≈ 11 Tage bei 10-min-Hypothese). Das schreibt die App per GATT `07` raus. Ohne Gerät geht derselbe Dump aus den HCI-Logs:
+
+Kein venv/bleak nötig:
+
+```
+python collector/dump_history.py --help
+```
 
 ```
 python collector/dump_history.py --from-extract hci-logs/extract
 ```
 
-schreibt `data/history_f4db000000d9.csv`. Dashboard-Tab **History-CSV**.  
-`timestamp_inferred` ist **Hypothese 10 min**, keine Geräteuhr. Details: [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md).
+### Ausgabe lesen
 
-Am Büro-Gerät (gleiche Sequenz wie die App: `1A` → `01` → alle `07`-Pages):
+Zwei Blöcke bei Treffer:
+
+```
+Extract hci_snoop_2025_11_26_15_14_35.cfa  pages=530  samples=1586  count_01=1586  newest_index=1585
+geschrieben: data/history_f4db000000d9.csv
+timestamp_inferred: Anker 2025-11-26T15:19:35Z  interval=600.0 s (Hypothese)
+```
+
+| Feld | Soll |
+|------|------|
+| Datei | längster Nicht-`old`-Dump, hier `15_14_35` |
+| `pages` / `samples` | 530 Pages → **1586** Zeilen |
+| `count_01` | Antwort auf Write `01` in derselben Capture (History-Länge) |
+| Datei auf Disk | `data/history_f4db000000d9.csv` (gitignored, Dump **ersetzt** die Datei) |
+
+Datei öffnen. Header plus 1586 Datenzeilen. Erste und letzte Zeile zur Kontrolle:
+
+| Spalte | Bedeutung |
+|--------|-----------|
+| `mac` | `f4:db:00:00:00:d9` |
+| `index` | 0 = **älteste**, letzte Zeile = neueste. Nicht die Dump-Uhr. |
+| `record` | 0..2 in der Page (`count=01` nur 0) |
+| `temp_c` | `/16`. Index 0: **24,0625**. Index 1584: **22,9375** (Hum an Offset 8) |
+| `humidity_rh` | `/16`. Index 0: **59,25**. Index 1584: **62,5** |
+| `raw_hex` | 20-Byte-Notify `07`, ohne Leerzeichen |
+| `timestamp_inferred` | **Hypothese 10 min** (ADV-Counter/Count ≈ 600 s), keine Geräte-Wanduhr. Index 0 ≈ 15.11.2025, neueste ≈ Capture-Ende 26.11.2025 15:19Z |
+
+Keine Zeilen / Exit 1: Extract-Pfad prüfen (`hci-logs/extract/att_fff5_fff3.csv` muss existieren).
+
+Optional:
+
+```
+python collector/dump_history.py --from-extract hci-logs/extract --no-timestamps
+python collector/dump_history.py --from-extract hci-logs/extract --output PATH
+```
+
+Protokoll und Intervall: [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md).
+
+Dashboard neu laden (Schritt 5). Tab **History-CSV (1586)**. X-Achse ist die abgeleitete Zeit, nicht der Index. Quelle **History-Capture (07)** bleibt der HCI-Beleg (Index, Dump-Zeit).
+
+---
+
+## 7. History vom Gerät (GATT)
+
+Hersteller-App **nicht** verbunden. venv wie in Schritt 0 (`bleak` muss da sein). Linux setzt CCCD zuverlässiger als macOS.
 
 ```
 python collector/dump_history.py --address f4:db:00:00:00:d9
 ```
 
-Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.
+Ohne MAC, Ziel nur über System ID `D9 00 00 00 00 00 DB F4`:
+
+```
+python collector/dump_history.py --use-system-id
+```
+
+### Was passiert
+
+Dieselbe Sequenz wie die App, sonst nichts:
+
+1. Connect, System ID prüfen
+2. Notify an (CCCD `01 00`)
+3. Write `1A` → Status
+4. Write `01` → Sample-Count
+5. Wiederholt Write `07 <index> 00 00 <count>` — `count` 03, letzte Pages ggf. 01
+
+528 Pages à 3 Samples dauern grob **1–2 Minuten** (Capture-Median ~0,16 s je Page). Fortschritt alle 25 Pages auf stdout.
+
+### Ausgabe lesen
+
+```
+Sequenz 1A → 01 → 07-Pages
+  Status 1A  raw=…
+  Count 01   samples=1586  pages=530  (~106 s bei 0,2 s/Page)
+  Page 1/530  index=0  count=3  records=3
+  …
+fertig: 1586 Samples aus 530 Pages in … s
+geschrieben: data/history_f4db000000d9.csv
+```
+
+`samples` kommt vom Gerät (`01`), nicht aus einer Schätzung. CSV-Spalten wie in Schritt 6. `timestamp_inferred`: neuestes Sample ≈ jetzt, ältere um 10 min (Hypothese).
+
+Neueste Page grob gegen ein Live-ADV (Schritt 2) halten: Temp `/16` sollte in der Nähe der Anzeige liegen (kein +10, Stand 2026-09-03). Index 0 ist alt, nicht Live.
+
+**Timeout auf 1A/01:** Gerät näher, App zu, `--notify-timeout 3`. Falsche System ID → Abbruch (kein Erstes-Gerät-Fallback).
+
+Nur die ersten Pages (Test):
+
+```
+python collector/dump_history.py --address f4:db:00:00:00:d9 --max-pages 2
+```
+
+Eine einzelne Page ohne CSV: Schritt 8.
+
+Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. Kein 1-Byte-`07`.
 
 ---
 
-## Noch nicht
+## 8. Optional: eine Page probehalber
 
-GATT-Probe einzeln (eine Page):
+Nur Count oder eine History-Page, keine CSV:
 
 ```
 python collector/read_thermometer_data.py --address f4:db:00:00:00:d9
+python collector/read_thermometer_data.py --address f4:db:00:00:00:d9 --history 0
 ```
+
+`--history 0` = älteste Page (`count=03`). Volle History bleibt `dump_history.py`.
 
 Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.

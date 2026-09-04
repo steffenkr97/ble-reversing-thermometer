@@ -38,7 +38,7 @@ python collector/dump_history.py --use-system-id
 | `--notify-timeout` | Standard 2 s je Notify (Capture `07` Median 157 ms, Max 449 ms). |
 | `--retries` | Wiederholungen pro Page bei Timeout, Standard 2. |
 
-`--help` braucht kein bleak. Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. `07`-Writes nur 6 Byte, `count` nur `01` oder `03` — nie `02` (in `15_14_35` zwei Rest-Pages `01`).
+`--help` braucht kein bleak. Schritt-für-Schritt inkl. erwarteter Ausgabe: [ANLEITUNG.md](../ANLEITUNG.md) (Abschnitte 6–8). Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. `07`-Writes nur 6 Byte, `count` nur `01` oder `03` — nie `02` (in `15_14_35` zwei Rest-Pages `01`).
 
 ## Ablauf Live (Fakt aus Captures)
 
