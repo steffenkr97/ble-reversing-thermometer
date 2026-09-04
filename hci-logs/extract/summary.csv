@@ -1,0 +1,8 @@
+file,size,records,datalink,le_conns,adv_target,adv_other,fff5_writes,fff3_notifies,FFF5,FFF3,CCCD,hints,errors
+hci_snoop_2025_11_26_14_52_30.cfa,19960,255,1002,0,10,28,0,0,,,,OnePlus; oneplus; ThermoBeacon; btsnoop; context:........OnePlus 5T..............,
+hci_snoop_2025_11_26_14_52_44.cfa,66531,1182,1002,2,25,158,98,98,0x0021,0x0024,0x0025,OnePlus; oneplus; ThermoBeacon; btsnoop; context:...&....OnePlus 5T..............,
+hci_snoop_2025_11_26_15_00_04.cfa,146578,2948,1002,2,25,105,530,530,0x0021,0x0024,0x0025,OnePlus; oneplus; ThermoBeacon; btsnoop; context:...]....OnePlus 5T..............,
+hci_snoop_2025_11_26_15_14_35.cfa,193832,3712,1002,6,67,315,536,533,0x0021,0x0024,0x0025,OnePlus; oneplus; ThermoBeacon; btsnoop; context:..y.....OnePlus 5T..............,
+old/hci_snoop_2018_01_01_12_06_14.cfa,19788,293,1002,0,0,0,0,0,,,,OnePlus; oneplus; btsnoop; context:.V.A....OnePlus 5T..............,
+old/hci_snoop_2018_01_01_12_06_26.cfa,380810,4640,1002,2,37,916,376,376,0x0021,0x0024,0x0025,OnePlus; oneplus; ThermoBeacon; btsnoop; context:........OnePlus 5T..............,
+old/hci_snoop_2025_11_21_07_45_17.cfa,98906,1873,1002,2,8,44,280,276,0x0021,0x0024,0x0025,OnePlus; oneplus; ThermoBeacon; btsnoop; context:........OnePlus 5T..............,
