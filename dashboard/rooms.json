@@ -1,0 +1,10 @@
+{
+  "rooms": [
+    {
+      "id": "buero",
+      "name": "Büro",
+      "mac": "f4:db:00:00:00:d9",
+      "confirmed": true
+    }
+  ]
+}

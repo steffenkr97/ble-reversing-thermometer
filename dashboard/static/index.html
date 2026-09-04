@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ThermoBeacon — Räume</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <div>
+        <p class="eyebrow">Lokal · kein Cloud · Encoding /16</p>
+        <h1>ThermoBeacon</h1>
+      </div>
+      <div class="top-meta" id="top-meta">lädt…</div>
+    </header>
+
+    <section class="rooms" id="rooms" aria-label="Räume"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2 id="chart-title">Verlauf</h2>
+          <p class="hint" id="chart-hint"></p>
+        </div>
+        <div class="source-tabs" id="source-tabs" role="tablist"></div>
+      </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="chart-wrap">
+        <canvas id="chart" width="1200" height="420" aria-label="Temperatur und Luftfeuchtigkeit"></canvas>
+        <div class="legend">
+          <span class="swatch temp"></span> Temperatur °C
+          <span class="swatch hum"></span> Luftfeuchtigkeit %rF
+        </div>
+        <div class="tooltip" id="tooltip" hidden></div>
+      </div>
+      <p class="empty" id="empty" hidden></p>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-head">
+        <h2>Messpunkte</h2>
+        <p class="hint" id="table-hint"></p>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Zeit / Index</th>
+              <th>°C</th>
+              <th>%rF</th>
+              <th>Quelle</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p>Nur eigene Geräte (Allowlist). Hum ±3 % zum Display. History ohne Wanduhr. Nicht senden: 0x18 / 0x04.</p>
+    </footer>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@
 
 Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 00 DB F4`.
 
-**Aktuelle Phase:** ADV-Live am Büro-Gerät bestätigt. Als Nächstes: Live-CSV, dann History-Dump (Phase 6+). Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** ADV-Live am Büro-Gerät bestätigt. Dashboard liest CSV + HCI-Belege. Als Nächstes: Live-CSV, dann History-Dump (Phase 6+). Nicht `0x18`/`0x04`.
 
 ---
 
@@ -19,7 +19,8 @@ Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 
 | HCI-Capture der offiziellen App | erledigt (`hci-logs/*.cfa`, [01-sessions.md](hci-logs/01-sessions.md)) |
 | Encoding von °C / %rF | `/16`; Live: Temp = Display 25,125 °C; Hum ±3 %; Capture Nov 2025 hatte +10 |
 | Collector mit Speichern | Code da; ADV-Scan live OK; CSV-Lauf noch offen |
-| History-Dump / 5 Geräte / Dashboard | Phase 6–8, noch nicht begonnen |
+| Lokales Dashboard | Code da (`dashboard/server.py`); ohne Live-CSV: HCI-Belege |
+| History-Dump / 5 Geräte | Phase 6–7, noch nicht begonnen |
 
 Live-CSV = `collect.py` über ADV (kein GATT). GATT-Probe bleibt `read_thermometer_data.py`. `fuzzer.py` nur für bereits beobachtete Kommandos; Blacklist `0x04`, `0x05`, `0xFF`, `0xFE` bleibt unangetastet.
 
@@ -131,15 +132,17 @@ Kandidaten aus den HCI-Scans (Zugehörigkeit **bestätigen**, nicht annehmen):
 
 ---
 
-## Phase 8 — Dashboard-Daten (UI später)
+## Phase 8 — Dashboard
 
-Kein UI in dieser Phase — nur Daten, die ein Dashboard lesen kann.
+Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-dashboard.md](hci-logs/09-dashboard.md).
 
-- [ ] Ein Schema für Live und History (gleiche Spalten + `source=adv|history`, `room`)
-- [ ] Optional JSONL oder SQLite, wenn CSV für 5 Geräte × History unhandlich wird
-- [ ] Dashboard / Plots (Räume, Verläufe) — **danach**, wenn die Dateien stehen
+- [x] Gemeinsames Sample-JSON: Spalten wie Live-CSV plus `source`, `room`, optional `index`
+- [x] Allowlist `dashboard/rooms.json` (Büro); fremde MACs verworfen
+- [x] Dashboard / Plots (Räume, Verläufe) — `python dashboard/server.py`
+- [ ] Live-CSV am Büro, damit die Quelle `adv` echte Sammelzeiten hat
+- [ ] Optional JSONL / SQLite, wenn 5 Geräte × History unhandlich wird
 
-**Done, wenn:** Live- und History-Dateien ohne Extra-Parsing plotbar sind.
+**Done, wenn:** Live- und History-Dateien ohne Extra-Parsing plotbar sind. UI ist da; Live-CSV und History-Dump am Gerät fehlen noch.
 
 ---
 
@@ -161,8 +164,8 @@ Kein UI in dieser Phase — nur Daten, die ein Dashboard lesen kann.
 4. ~~Collector ADV→CSV (Code)~~ — erledigt, [08-collect.md](hci-logs/08-collect.md)
 5. ~~Live-ADV `scan_live.py`~~ — erledigt 2026-09-03, Display = Roh 25,125 °C, [07-read.md](hci-logs/07-read.md)
 6. `python collector/collect.py` → Live-CSV (Büro)
-7. GATT-Probe + History-Dump Büro (Phase 6)
-8. Geräteliste 5 Räume, dann Live+History für alle (Phase 7)
-9. Einheitliches Speicherformat; Dashboard erst danach (Phase 8)
+7. `python dashboard/server.py` → `http://127.0.0.1:8765/` (HCI-Belege schon ohne CSV)
+8. GATT-Probe + History-Dump Büro (Phase 6)
+9. Geräteliste 5 Räume in `dashboard/rooms.json`, dann Live+History für alle (Phase 7)
 
 **Nicht** als Nächstes `0x18`/`0x04`.

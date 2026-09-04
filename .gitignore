@@ -2,4 +2,5 @@ data/*.csv
 .venv/
 py/__pycache__/
 collector/__pycache__/
+dashboard/__pycache__/
 *.pyc
