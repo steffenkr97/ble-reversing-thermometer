@@ -45,6 +45,8 @@ History hat **keine Wanduhr**. Die Capture-Zeitstempel in `history_capture` sind
 
 `parse_adv_manufacturer` bleibt auf die Büro-MAC begrenzt. Capture-ADV anderer MACs erscheint deshalb nicht, auch wenn sie später in `rooms.json` stehen, bis der Parser gegen Display geprüft ist.
 
+Zeilen aus `old/*.cfa` werden übersprungen: die 2018-Zeitstempel sind Geräteuhr, nicht Wanduhr, und würden die Zeitachse unlesbar machen.
+
 ## API (nur GET)
 
 | Pfad | Inhalt |

@@ -54,6 +54,12 @@ def _hex_bytes(value: str) -> bytes:
     return bytes.fromhex(value.replace(" ", "").replace(":", "").strip())
 
 
+def _extract_file_is_old(file_name: str) -> bool:
+    """old/*.cfa haben oft Geräteuhr 2018 — Zeitachse sonst unbrauchbar."""
+    name = (file_name or "").replace("\\", "/")
+    return name.startswith("old/") or "/old/" in name
+
+
 def load_rooms(path: str = DEFAULT_ROOMS_PATH) -> List[dict]:
     """Allowlist aus rooms.json. Nur bestätigte eigene Geräte."""
     with open(path, encoding="utf-8") as handle:
@@ -255,6 +261,8 @@ def read_extract_adv(path: str, rooms: Sequence[dict]) -> List[dict]:
     with open(path, newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
+            if _extract_file_is_old(row.get("file") or ""):
+                continue
             if (row.get("event") or "") != "ADV_IND":
                 continue
             mac = normalize_mac(row.get("mac") or "")
@@ -299,6 +307,8 @@ def read_extract_history(path: str, rooms: Sequence[dict]) -> List[dict]:
     with open(path, newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
+            if _extract_file_is_old(row.get("file") or ""):
+                continue
             if (row.get("kind") or "") != "FFF3-Notify":
                 continue
             if (row.get("opcode_byte") or "").lower() != "0x07":

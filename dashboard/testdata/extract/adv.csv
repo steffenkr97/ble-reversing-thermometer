@@ -1,3 +1,5 @@
 file,rec,timestamp,mac,target,event,rssi,ad_hex,name,uuids16,mfg_hex,mfg_company
 hci_snoop_2025_11_26_14_52_30.cfa,171,2025-11-26T14:52:39.595Z,f4:db:00:00:00:d9,yes,ADV_IND,-37,02 01 06,ThermoBeacon,FFF0,1B 00 10 00 D9 00 00 00 DB F4 B5 0B 61 01 0F 04 4B 7D 0E 00,0x001B
+old/hci_snoop_2018_01_01_12_06_26.cfa,270,2018-01-01T12:06:33.079Z,f4:db:00:00:00:d9,yes,ADV_IND,-59,02 01 06,ThermoBeacon,FFF0,1B 00 FC 00 D9 00 00 00 DB F4 CE 0B 70 01 F0 03 09 A1 05 00,0x001B
 hci_snoop_2025_11_26_14_52_30.cfa,165,2025-11-26T14:52:39.146Z,f4:d0:00:00:02:1a,no,ADV_IND,-58,,ThermoBeacon,FFF0,1B 00 00 00 1A 02 00 00 D0 F4 9D 01 18 1F 06 00 1B 01 20 3E 03 00,0x001B
+

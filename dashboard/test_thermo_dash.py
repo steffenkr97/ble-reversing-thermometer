@@ -92,6 +92,7 @@ class TestExtract(unittest.TestCase):
         self.assertEqual(rows[0]["temp_c"], 22.0625)
         self.assertEqual(rows[0]["humidity_rh"], 64.9375)
         self.assertEqual(rows[0]["mac"], "f4:db:00:00:00:d9")
+        self.assertTrue(rows[0]["timestamp"].startswith("2025-"))
 
     def test_history_gold_and_dedupe(self):
         rooms = load_rooms(ROOMS_PATH)
