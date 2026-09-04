@@ -15,10 +15,17 @@ if _PY_DIR not in sys.path:
 
 from thermo_rooms import (  # noqa: E402
     DEFAULT_ROOMS_PATH,
+    MAX_ROOMS,
+    RoomsError,
+    add_room,
     allowlist_macs,
+    delete_room,
     encoding_checked_macs,
     load_rooms,
     mac_in_allowlist,
+    save_rooms,
+    update_room,
+    validate_rooms,
 )
 
 PROD_ROOMS = os.path.join(_ROOT, "dashboard", "rooms.json")
@@ -68,6 +75,41 @@ class TestLoadRooms(unittest.TestCase):
 
     def test_default_path_exists(self):
         self.assertTrue(os.path.isfile(DEFAULT_ROOMS_PATH))
+
+
+class TestSaveRooms(unittest.TestCase):
+    def test_add_update_delete_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "rooms.json")
+            rooms = add_room([], "Büro", "F4:DB:00:00:00:D9")
+            self.assertTrue(rooms[0]["confirmed"])
+            self.assertEqual(rooms[0]["mac"], "f4:db:00:00:00:d9")
+            save_rooms(path, rooms)
+            loaded = load_rooms(path)
+            self.assertEqual(loaded[0]["name"], "Büro")
+            renamed = update_room(loaded, loaded[0]["id"], name="Keller")
+            save_rooms(path, renamed)
+            self.assertEqual(load_rooms(path)[0]["name"], "Keller")
+            empty = delete_room(renamed, renamed[0]["id"])
+            save_rooms(path, empty)
+            self.assertEqual(load_rooms(path), [])
+
+    def test_reject_bad_mac_and_duplicate(self):
+        with self.assertRaises(RoomsError):
+            validate_rooms([{"name": "X", "mac": "zz"}])
+        rooms = add_room([], "A", "aa:bb:cc:dd:ee:ff")
+        with self.assertRaises(RoomsError):
+            add_room(rooms, "B", "aa:bb:cc:dd:ee:ff")
+        with self.assertRaises(RoomsError):
+            add_room([], "  ", "aa:bb:cc:dd:ee:ff")
+
+    def test_max_five(self):
+        rooms = []
+        for i in range(MAX_ROOMS):
+            mac = "aa:bb:cc:dd:ee:{:02x}".format(i)
+            rooms = add_room(rooms, "R{}".format(i), mac)
+        with self.assertRaises(RoomsError):
+            add_room(rooms, "Extra", "aa:bb:cc:dd:ee:ff")
 
 
 if __name__ == "__main__":

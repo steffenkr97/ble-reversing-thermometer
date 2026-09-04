@@ -1,5 +1,8 @@
 data/*.csv
 data/*.jsonl
+data/sync_*.json
+data/app_status.json
+data/*.tmp
 .venv/
 py/__pycache__/
 collector/__pycache__/

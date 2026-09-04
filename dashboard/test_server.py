@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import tempfile
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -121,6 +123,85 @@ class TestHttpApi(unittest.TestCase):
         payload = self._json("/api/nope", status=404)
         self.assertEqual(payload["error"], "nicht gefunden")
 
+    def test_status_without_worker(self):
+        payload = self._json("/api/status")
+        self.assertFalse(payload["ble"])
+        self.assertEqual(payload["phase"], "idle")
+
+
+class TestRoomWrites(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        rooms_path = os.path.join(cls.tmp.name, "rooms.json")
+        shutil.copy(os.path.join(TESTDATA, "rooms.json"), rooms_path)
+        store = DashStore(
+            data_dir=TESTDATA,
+            rooms_path=rooms_path,
+            extract_dir=os.path.join(TESTDATA, "extract"),
+            include_extract=False,
+        )
+        store.refresh(force=True)
+        status = {"ble": True, "phase": "live", "message": "test", "devices": {}}
+        handler = server.make_handler(store, status_provider=lambda: status)
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        cls.port = cls.httpd.server_address[1]
+        cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.base = "http://127.0.0.1:{0}".format(cls.port)
+        cls.rooms_path = rooms_path
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+        cls.tmp.cleanup()
+
+    def _json(self, method, path, payload=None, status=200):
+        data = None
+        headers = {}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        req = Request(self.base + path, data=data, headers=headers, method=method)
+        try:
+            with urlopen(req, timeout=5) as resp:
+                self.assertEqual(resp.status, status)
+                return json.loads(resp.read().decode("utf-8"))
+        except HTTPError as exc:
+            body = json.loads(exc.read().decode("utf-8"))
+            self.assertEqual(exc.code, status)
+            return body
+
+    def test_status_from_provider(self):
+        payload = self._json("GET", "/api/status")
+        self.assertTrue(payload["ble"])
+        self.assertEqual(payload["phase"], "live")
+
+    def test_crud_and_validation(self):
+        created = self._json(
+            "POST",
+            "/api/rooms",
+            {"name": "Keller", "mac": "AA:BB:CC:DD:EE:FF"},
+            status=201,
+        )
+        macs = [r["mac"] for r in created["rooms"]]
+        self.assertIn("aa:bb:cc:dd:ee:ff", macs)
+        keller = [r for r in created["rooms"] if r["mac"] == "aa:bb:cc:dd:ee:ff"][0]
+        self.assertTrue(keller["confirmed"])
+        renamed = self._json(
+            "PATCH",
+            "/api/rooms/" + keller["id"],
+            {"name": "Keller 2"},
+        )
+        names = [r["name"] for r in renamed["rooms"]]
+        self.assertIn("Keller 2", names)
+        gone = self._json("DELETE", "/api/rooms/" + keller["id"])
+        self.assertNotIn("aa:bb:cc:dd:ee:ff", [r["mac"] for r in gone["rooms"]])
+        bad = self._json("POST", "/api/rooms", {"name": "X", "mac": "nope"}, status=400)
+        self.assertIn("MAC", bad["error"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

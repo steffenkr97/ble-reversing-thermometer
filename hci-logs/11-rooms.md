@@ -28,7 +28,7 @@ Aktuell **ein** bestätigtes Gerät (Büro). Vier Capture-MACs stehen als Kandid
 | `f4:db:00:00:02:42` | Kandidat 4 |
 | `62:53:00:00:0f:1f` | Kandidat 5, anderes Company-Präfix — extra prüfen |
 
-Nach Display-Check: `confirmed` und `encoding_checked` auf `true` setzen, `name` auf den Raumnamen.
+Nach Display-Check: `confirmed` und `encoding_checked` auf `true` setzen, `name` auf den Raumnamen — in der App-UI („Bestätigen“) oder in der Datei. Die App synct nur **confirmed** (kein GATT auf Kandidaten). Über die UI hinzugefügte Geräte sind confirmed. Max. 5 Einträge (`save_rooms`). [12-app.md](12-app.md).
 
 ## Collector
 
