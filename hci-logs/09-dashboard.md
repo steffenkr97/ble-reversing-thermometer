@@ -5,13 +5,14 @@
 **Tests:** `python -m unittest discover -s dashboard -p "test_*.py"`  
 **Encoding:** unverändert `int16le / 16` ([06-encoding.md](06-encoding.md), [08-collect.md](08-collect.md))
 
-Kein BLE, kein GATT, keine Cloud. Der Server **liest** nur: Live-CSV aus `data/`, optionale History-CSV, und die schon exportierten HCI-Extracts. Es gibt keine Writes auf `FFF5`.
+Kein GATT im HTTP-Prozess. Die **App** (`python app.py`) startet denselben Server plus BLE-Worker ([12-app.md](12-app.md)). `dashboard/server.py` allein bleibt ohne Worker. Writes auf `rooms.json` nur von localhost. Es gibt keine FFF5-Writes aus den HTTP-Handlern.
 
 ## Start
 
 Im Repo-Root (kein bleak nötig):
 
 ```
+python app.py
 python dashboard/server.py
 ```
 
@@ -47,12 +48,16 @@ History hat **keine Geräte-Wanduhr**. `timestamp_inferred` ist Hypothese **10 m
 
 Zeilen aus `old/*.cfa` werden übersprungen: die 2018-Zeitstempel sind Geräteuhr, nicht Wanduhr, und würden die Zeitachse unlesbar machen.
 
-## API (nur GET)
+## API
 
 | Pfad | Inhalt |
 |------|--------|
-| `/api/overview` | Räume, Zähler je Quelle, Encoding-Hinweis |
-| `/api/samples?mac=&source=&limit=` | Samples + Summary. `limit` dünnt gleichmäßig aus (History-Charts) |
+| `GET /api/overview` | Räume, Zähler je Quelle, Encoding-Hinweis |
+| `GET /api/samples?mac=&source=&limit=` | Samples + Summary. `limit` dünnt gleichmäßig aus (History-Charts) |
+| `GET /api/status` | BLE-Worker (Phase, History/Live je Gerät); ohne Worker `ble=false` |
+| `POST /api/rooms` | Gerät anlegen (Name + MAC), max. 5, nur localhost |
+| `PATCH /api/rooms/{id}` | Name / confirmed / encoding_checked / note |
+| `DELETE /api/rooms/{id}` | Gerät entfernen |
 
 Unbekannte `source` → 400. Statische Dateien nur unter `dashboard/static/` (kein `..`).
 
@@ -66,7 +71,7 @@ Live-Spalten bleiben die Collector-Spalten ([08-collect.md](08-collect.md)). His
 
 ## UI
 
-Eine Seite, kein Build, kein npm. Canvas-Chart (Temperatur + Luftfeuchtigkeit), Raumkarten, Quellen-Tabs, Tabelle. Auto-Auswahl: Live-CSV wenn Zeilen da sind, sonst History-CSV, sonst History-Capture.
+Eine Seite, kein Build, kein npm. Canvas-Chart (Temperatur + Luftfeuchtigkeit), Raumkarten, Quellen-Tabs, Tabelle, Geräteformular, Sync-Leiste. Auto-Refresh 15 s. Auto-Auswahl: Live-CSV wenn Zeilen da sind, sonst History-CSV, sonst History-Capture.
 
 Hum `/16` intern, Live ±3 % zum Display — in der Fußzeile, nicht als exakte Display-Kopie.
 
