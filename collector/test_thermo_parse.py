@@ -42,6 +42,22 @@ class TestParseAdvManufacturer(unittest.TestCase):
         mfg[4] = 0xAA
         self.assertIsNone(parse_adv_manufacturer(bytes(mfg)))
 
+    def test_allowlist_accepts_other_mac(self):
+        mfg = bytearray.fromhex("1B001000D9000000DBF4B50B61010F044B7D0E00")
+        mfg[4:10] = bytes(reversed(bytes.fromhex("f4d00000021a")))
+        frame = bytes(mfg)
+        self.assertIsNone(parse_adv_manufacturer(frame))
+        live = parse_adv_manufacturer(frame, allowed_macs=["f4:d0:00:00:02:1a"])
+        self.assertIsInstance(live, AdvLive)
+        self.assertEqual(live.mac, "f4:d0:00:00:02:1a")
+        self.assertEqual(live.temp_c, 22.0625)
+
+    def test_allowlist_rejects_unlisted_mac(self):
+        mfg = bytes.fromhex("1B001000D9000000DBF4B50B61010F044B7D0E00")
+        self.assertIsNone(
+            parse_adv_manufacturer(mfg, allowed_macs=["f4:d0:00:00:02:1a"])
+        )
+
 
 class TestParseFff3(unittest.TestCase):
     def test_history_07_count03_index0(self):

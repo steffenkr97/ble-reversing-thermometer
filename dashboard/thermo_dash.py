@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import json
 import os
 import re
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -18,6 +17,14 @@ if _COLLECTOR not in sys.path:
     sys.path.insert(0, _COLLECTOR)
 
 from thermo_parse import History07, parse_adv_manufacturer, parse_fff3  # noqa: E402
+from thermo_rooms import (  # noqa: E402
+    allowlist_macs,
+    encoding_checked_macs,
+    load_rooms,
+    mac12,
+    normalize_mac,
+    room_by_mac,
+)
 from thermo_store import COLUMNS  # noqa: E402
 
 SOURCE_ADV = "adv"
@@ -39,17 +46,6 @@ DEFAULT_DATA_DIR = os.path.join(_ROOT, "data")
 DEFAULT_EXTRACT_DIR = os.path.join(_ROOT, "hci-logs", "extract")
 
 
-def mac12(mac: str) -> str:
-    return mac.replace(":", "").replace("-", "").replace(".", "").lower()
-
-
-def normalize_mac(mac: str) -> str:
-    compact = mac12(mac)
-    if len(compact) == 12 and all(c in "0123456789abcdef" for c in compact):
-        return ":".join(compact[i : i + 2] for i in range(0, 12, 2))
-    return mac.strip().lower()
-
-
 def _hex_bytes(value: str) -> bytes:
     return bytes.fromhex(value.replace(" ", "").replace(":", "").strip())
 
@@ -58,40 +54,6 @@ def _extract_file_is_old(file_name: str) -> bool:
     """old/*.cfa haben oft Geräteuhr 2018 — Zeitachse sonst unbrauchbar."""
     name = (file_name or "").replace("\\", "/")
     return name.startswith("old/") or "/old/" in name
-
-
-def load_rooms(path: str = DEFAULT_ROOMS_PATH) -> List[dict]:
-    """Allowlist aus rooms.json. Nur bestätigte eigene Geräte."""
-    with open(path, encoding="utf-8") as handle:
-        payload = json.load(handle)
-    rooms = []
-    for raw in payload.get("rooms") or []:
-        mac = normalize_mac(str(raw.get("mac") or ""))
-        name = str(raw.get("name") or "").strip()
-        room_id = str(raw.get("id") or mac12(mac))
-        if not mac or not name:
-            continue
-        rooms.append(
-            {
-                "id": room_id,
-                "name": name,
-                "mac": mac,
-                "confirmed": bool(raw.get("confirmed", True)),
-            }
-        )
-    return rooms
-
-
-def room_by_mac(rooms: Sequence[dict], mac: str) -> Optional[dict]:
-    target = normalize_mac(mac)
-    for room in rooms:
-        if room["mac"] == target:
-            return room
-    return None
-
-
-def allowlist_macs(rooms: Sequence[dict]) -> List[str]:
-    return [room["mac"] for room in rooms]
 
 
 def _sample(
@@ -252,10 +214,11 @@ def load_live_and_history(data_dir: str, rooms: Sequence[dict]) -> List[dict]:
 
 
 def read_extract_adv(path: str, rooms: Sequence[dict]) -> List[dict]:
-    """HCI-Extract ADV_IND, nur Allowlist. parse_adv_manufacturer filtert Büro-MAC."""
+    """HCI-Extract ADV_IND. Nur Allowlist + encoding_checked (Büro bis Display-Check)."""
     if not os.path.isfile(path):
         return []
     allowed = set(allowlist_macs(rooms))
+    checked = set(encoding_checked_macs(rooms))
     samples = []
     file_name = os.path.basename(path)
     with open(path, newline="", encoding="utf-8") as handle:
@@ -275,7 +238,7 @@ def read_extract_adv(path: str, rooms: Sequence[dict]) -> List[dict]:
                 frame = _hex_bytes(mfg)
             except ValueError:
                 continue
-            parsed = parse_adv_manufacturer(frame)
+            parsed = parse_adv_manufacturer(frame, allowed_macs=checked or None)
             if parsed is None:
                 continue
             if allowed and parsed.mac not in allowed:
@@ -528,6 +491,8 @@ class DashStore:
                     "name": room["name"],
                     "mac": mac,
                     "confirmed": room.get("confirmed", True),
+                    "encoding_checked": room.get("encoding_checked", False),
+                    "note": room.get("note"),
                     "latest": latest_live or (adv_cap[-1] if adv_cap else None),
                     "counts": {
                         SOURCE_ADV: len(live),
@@ -556,9 +521,9 @@ class DashStore:
                 "history_interval_sec_hypothesis": 600,
             },
             "notes": [
-                "Nur Allowlist (rooms.json). Keine fremden MACs.",
+                "Allowlist = rooms.json. Kandidaten (confirmed=false) sind nicht automatisch eigene Geräte.",
                 "Live-CSV = collect.py über ADV. History-CSV = dump_history.py (GATT 07 oder Extract).",
-                "History-Capture = HCI-Extract 07, Beleg. Hum /16 intern; Live ±3 % zum Display.",
+                "Capture-ADV nur encoding_checked (Büro). Hum /16 intern; Live ±3 % zum Display.",
             ],
         }
 

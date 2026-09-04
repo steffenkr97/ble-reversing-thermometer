@@ -11,7 +11,7 @@ import asyncio
 import os
 import sys
 import time
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Sequence
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -40,6 +40,12 @@ from thermo_parse import (  # noqa: E402
     build_history_07_write,
     parse_fff3,
 )
+from thermo_rooms import (  # noqa: E402
+    DEFAULT_ROOMS_PATH,
+    allowlist_macs,
+    load_rooms,
+    room_by_mac,
+)
 from thermo_store import iso_utc_now  # noqa: E402
 
 
@@ -55,6 +61,7 @@ Beispiele:
   python collector/dump_history.py --from-extract hci-logs/extract
   python collector/dump_history.py --address f4:db:00:00:00:d9
   python collector/dump_history.py --use-system-id
+  python collector/dump_history.py --from-extract hci-logs/extract --all-rooms
 
 Nicht senden: 04 / 05 / 18 / 19 / 0F / F3.
 timestamp_inferred ist Hypothese (10 min, ADV-Counter/Count ≈ 600 s).
@@ -81,6 +88,17 @@ timestamp_inferred ist Hypothese (10 min, ADV-Counter/Count ≈ 600 s).
         "--mac",
         default=TARGET_MAC,
         help="Geräte-MAC für CSV/Extract (Standard: Büro {})".format(TARGET_MAC),
+    )
+    parser.add_argument(
+        "--rooms",
+        default=DEFAULT_ROOMS_PATH,
+        metavar="PATH",
+        help="Allowlist rooms.json (für --all-rooms und System-ID)",
+    )
+    parser.add_argument(
+        "--all-rooms",
+        action="store_true",
+        help="Extract/GATT für jede MAC in rooms.json (je history_<mac12>.csv)",
     )
     parser.add_argument(
         "--outdir",
@@ -142,6 +160,8 @@ timestamp_inferred ist Hypothese (10 min, ADV-Counter/Count ≈ 600 s).
         parser.error("--from-extract und --address schließen sich aus")
     if args.from_extract and args.use_system_id:
         parser.error("--from-extract und --use-system-id schließen sich aus")
+    if args.all_rooms and args.output:
+        parser.error("--all-rooms und --output schließen sich aus")
     if args.interval_sec <= 0:
         parser.error("--interval-sec muss größer als 0 sein")
     if args.notify_timeout <= 0:
@@ -160,10 +180,35 @@ timestamp_inferred ist Hypothese (10 min, ADV-Counter/Count ≈ 600 s).
     return args
 
 
-def resolve_csv_path(args: argparse.Namespace) -> str:
+def _expected_system_id(mac: str, rooms: Sequence[dict]) -> Optional[bytes]:
+    room = room_by_mac(rooms, mac) if rooms else None
+    hex_id = room.get("system_id") if room else None
+    if hex_id:
+        return bytes.fromhex(hex_id)
+    if normalize_mac(mac) == TARGET_MAC:
+        return TARGET_SYSTEM_ID
+    return None
+
+
+def _rooms_or_empty(args: argparse.Namespace) -> List[dict]:
+    try:
+        return load_rooms(args.rooms)
+    except OSError:
+        return []
+
+
+def resolve_csv_path(args: argparse.Namespace, mac: Optional[str] = None) -> str:
     if args.output:
         return args.output
-    return default_history_csv_path(args.mac, outdir=args.outdir)
+    return default_history_csv_path(mac or args.mac, outdir=args.outdir)
+
+
+def _dump_macs(args: argparse.Namespace) -> List[str]:
+    if args.all_rooms:
+        rooms = _rooms_or_empty(args)
+        macs = allowlist_macs(rooms)
+        return macs or [normalize_mac(args.mac)]
+    return [normalize_mac(args.mac)]
 
 
 def _stamp_rows(rows, args, newest_utc, newest_index):
@@ -212,16 +257,16 @@ async def fetch_history_pages(
     return pages
 
 
-def dump_from_extract(args: argparse.Namespace) -> int:
+def dump_from_extract_one(args: argparse.Namespace, mac: str) -> int:
     rows, meta = load_extract_history(
         args.from_extract,
-        mac=args.mac,
+        mac=mac,
         skip_old=not args.include_old,
     )
     if not rows:
         print(
             "Keine 07-Pages für {} in {}.".format(
-                normalize_mac(args.mac), meta.get("att_path") or args.from_extract
+                normalize_mac(mac), meta.get("att_path") or args.from_extract
             ),
             file=sys.stderr,
         )
@@ -231,11 +276,12 @@ def dump_from_extract(args: argparse.Namespace) -> int:
     if newest_index is None:
         newest_index = rows[-1]["index"]
     rows = _stamp_rows(rows, args, newest_utc, newest_index)
-    path = resolve_csv_path(args)
+    path = resolve_csv_path(args, mac)
     write_history_csv(path, rows)
     print(
-        "Extract {}  pages={}  samples={}  count_01={}  newest_index={}".format(
+        "Extract {}  mac={}  pages={}  samples={}  count_01={}  newest_index={}".format(
             meta.get("file"),
+            normalize_mac(mac),
             meta.get("page_count"),
             len(rows),
             meta.get("count_01"),
@@ -251,6 +297,22 @@ def dump_from_extract(args: argparse.Namespace) -> int:
             )
         )
     return 0
+
+
+def dump_from_extract(args: argparse.Namespace) -> int:
+    macs = _dump_macs(args)
+    rc = 1
+    wrote = 0
+    for mac in macs:
+        one = dump_from_extract_one(args, mac)
+        if one == 0:
+            wrote += 1
+            rc = 0
+    if args.all_rooms and wrote == 0:
+        return 1
+    if args.all_rooms:
+        print("Extract --all-rooms: {0}/{1} MACs mit History.".format(wrote, len(macs)))
+    return rc
 
 
 def _progress(step: int, total: int, parsed: History07) -> None:
@@ -271,17 +333,23 @@ async def dump_via_gatt(args: argparse.Namespace, device_address: str, address_w
     async with BleakClient(device_address, timeout=20.0) as client:
         print("Verbunden.")
         sid = await probe._read_system_id(client)
-        target_sid = probe._sid_bytes(TARGET_SYSTEM_ID)
+        rooms = _rooms_or_empty(args)
+        expected_sid = _expected_system_id(args.mac, rooms)
         if sid is None:
-            if address_was_given or probe._macs_equal(device_address, TARGET_MAC):
+            allow_missing = address_was_given or expected_sid is None
+            if expected_sid is not None and probe._macs_equal(device_address, args.mac):
+                allow_missing = True
+            if allow_missing:
                 print("System ID nicht lesbar; fahre mit gegebener Adresse fort.")
             else:
-                print("System ID nicht lesbar und Adresse ist nicht TARGET_MAC — Abbruch.")
+                print("System ID nicht lesbar und nicht auf der Allowlist — Abbruch.")
                 return 1
-        elif sid != target_sid:
+        elif expected_sid is None:
+            print("System ID {} (kein Sollwert in rooms.json).".format(probe._hex(sid)))
+        elif sid != expected_sid:
             print(
                 "System ID {} != Ziel {} — falsches Gerät, Abbruch.".format(
-                    probe._hex(sid), probe._hex(target_sid)
+                    probe._hex(sid), probe._hex(expected_sid)
                 )
             )
             return 1
@@ -363,7 +431,7 @@ async def dump_via_gatt(args: argparse.Namespace, device_address: str, address_w
         newest_utc = args.newest_time or iso_utc_now()
         newest_index = sample_count - 1 if sample_count else None
         rows = _stamp_rows(rows, args, newest_utc, newest_index)
-        path = resolve_csv_path(args)
+        path = resolve_csv_path(args, args.mac)
         write_history_csv(path, rows)
         print(
             "fertig: {} Samples aus {} Pages in {:.1f} s".format(
@@ -393,6 +461,20 @@ async def async_main(args: argparse.Namespace) -> int:
         return dump_from_extract(args)
 
     import read_thermometer_data as probe
+
+    if args.all_rooms:
+        macs = _dump_macs(args)
+        rc = 1
+        wrote = 0
+        for mac in macs:
+            print("== {} ==".format(mac))
+            args.mac = mac
+            one = await dump_via_gatt(args, mac, True)
+            if one == 0:
+                wrote += 1
+                rc = 0
+        print("GATT --all-rooms: {0}/{1} MACs geschrieben.".format(wrote, len(macs)))
+        return rc if wrote else 1
 
     if args.address:
         address = args.address

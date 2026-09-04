@@ -4,7 +4,7 @@
 
 Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 00 DB F4`.
 
-**Aktuelle Phase:** History-Dump-CLI ist da (`dump_history.py`). Extract-Export 1586 Samples. Als Nächstes: Live-CSV und Live-GATT-Dump am Büro. Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** Phase 7 Allowlist in `rooms.json` (Büro bestätigt, 4 Kandidaten). Collector je MAC. Büro-MVP-Feldlauf: `mvp_buero.py`. Nicht `0x18`/`0x04`.
 
 ---
 
@@ -18,9 +18,9 @@ Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 
 | 1-Byte-Fuzzer auf `FFF5` (`ble_kurz.csv`) | erledigt, nicht vollständig dekodiert |
 | HCI-Capture der offiziellen App | erledigt (`hci-logs/*.cfa`, [01-sessions.md](hci-logs/01-sessions.md)) |
 | Encoding von °C / %rF | `/16`; Live: Temp = Display 25,125 °C; Hum ±3 %; Capture Nov 2025 hatte +10 |
-| Collector mit Speichern | Code da; ADV-Scan live OK; CSV-Lauf noch offen |
-| Lokales Dashboard | Code da (`dashboard/server.py`); ohne Live-CSV: HCI-Belege |
-| History-Dump / 5 Geräte | Dump-CLI + Extract 1586 Samples; Live-GATT und 5 Räume offen |
+| Collector mit Speichern | Code: Allowlist je MAC; ADV-Scan live OK; CSV-Lauf am Büro noch offen |
+| Lokales Dashboard | Code da (`dashboard/server.py`); 5 Raumkarten, 4 Kandidaten |
+| History-Dump / 5 Geräte | Dump-CLI + Extract 1586 Samples + `--all-rooms`; Live-GATT und Display-Check 2–5 offen |
 
 Live-CSV = `collect.py` über ADV (kein GATT). GATT-Probe bleibt `read_thermometer_data.py`. `fuzzer.py` nur für bereits beobachtete Kommandos; Blacklist `0x04`, `0x05`, `0xFF`, `0xFE` bleibt unangetastet.
 
@@ -124,13 +124,14 @@ Kandidaten aus den HCI-Scans (Zugehörigkeit **bestätigen**, nicht annehmen):
 | `f4:db:00:00:02:42` | in Captures |
 | `62:53:00:00:0f:1f` | in Captures; anderes Company-Präfix — extra prüfen |
 
-- [ ] Geräteliste anlegen: MAC + Raumname (+ optional System ID `2A23`). Nur eigene Geräte
-- [ ] Live-Collector: Allowlist statt einer hart kodierten `TARGET_MAC` — ein Sample pro MAC in die jeweilige CSV
-- [ ] ADV-Live pro Raum einmal gegen Display/`/16` (Temp sollte wie Büro die Anzeige treffen)
-- [ ] History-Dump für jedes Gerät in der Liste (gleiche `07`-Sequenz)
-- [ ] Fremde MACs in Reichweite ignorieren
+- [x] Geräteliste anlegen: MAC + Raumname (+ optional System ID `2A23`) in `dashboard/rooms.json`. Büro `confirmed`. Vier Capture-MACs als Kandidaten (`confirmed: false`)
+- [x] Live-Collector: Allowlist statt einer hart kodierten `TARGET_MAC` — ein Sample pro MAC in die jeweilige CSV
+- [ ] ADV-Live pro Raum einmal gegen Display/`/16` (Temp sollte wie Büro die Anzeige treffen) — Feld, Gerät 2–5
+- [x] History-Dump CLI je MAC (`--address` / `--all-rooms`); Extract nur Büro hat `07`-Pages
+- [ ] History-Dump live für jedes **bestätigte** Gerät
+- [x] Fremde MACs in Reichweite ignorieren (nicht in `rooms.json`)
 
-**Done, wenn:** alle 5 eigenen Geräte in der Liste stehen und je Live-CSV + History-Datei haben.
+**Done, wenn:** alle 5 eigenen Geräte `confirmed` + `encoding_checked` und je Live-CSV + History-Datei haben. Code und Kandidatenliste sind da; Zugehörigkeit ist Feldarbeit. Details: [hci-logs/11-rooms.md](hci-logs/11-rooms.md).
 
 ---
 
@@ -139,11 +140,11 @@ Kandidaten aus den HCI-Scans (Zugehörigkeit **bestätigen**, nicht annehmen):
 Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-dashboard.md](hci-logs/09-dashboard.md).
 
 - [x] Gemeinsames Sample-JSON: Spalten wie Live-CSV plus `source`, `room`, optional `index`
-- [x] Allowlist `dashboard/rooms.json` (Büro); fremde MACs verworfen
+- [x] Allowlist `dashboard/rooms.json` (Büro confirmed; 4 Kandidaten sichtbar, nicht als eigene Geräte angenommen)
 - [x] Dashboard / Plots (Räume, Verläufe) — `python dashboard/server.py`
 - [ ] Live-CSV am Büro, damit die Quelle `adv` echte Sammelzeiten hat
 - [x] History-CSV aus Dump/Extract plotbar (`dump_history.py`, Quelle `history`)
-- [ ] Optional JSONL / SQLite, wenn 5 Geräte × History unhandlich wird
+- [ ] Optional JSONL / SQLite — **Parkplatz** (nicht Release 6.1/7)
 
 **Done, wenn:** Live- und History-Dateien ohne Extra-Parsing plotbar sind. UI und History-CSV-Import sind da; Live-CSV und Live-GATT-Dump am Gerät fehlen noch.
 
@@ -159,6 +160,18 @@ Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-
 
 ---
 
+## Parkplatz (nicht in Release 6.1 / 7)
+
+Bewusst nicht bauen, bis 5 bestätigte Räume wehtun oder ein Kalibrier-Test ansteht:
+
+- SQLite / JSONL statt CSV
+- History-Intervall 10 min als Fakt (erst mit zwei Live-Counts in `data/interval_evidence.jsonl`)
+- Hum-Anzeige enger als ±3 %
+- `0x18` / `0x04` nur in einem bewussten Kalibrier-Test
+- Dashboard-Komfort: Auto-Refresh, Batterie in der CSV, Alarme, Live+History in einem Chart
+
+---
+
 ## Empfohlene Reihenfolge (nächster konkreter Schritt)
 
 1. ~~HCI-Capture der App~~ — erledigt, siehe `hci-logs/01-…05-*.md`
@@ -166,10 +179,9 @@ Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-
 3. ~~Parser + ADV-CLI + GATT-Probe (Code)~~ — erledigt, [07-read.md](hci-logs/07-read.md)
 4. ~~Collector ADV→CSV (Code)~~ — erledigt, [08-collect.md](hci-logs/08-collect.md)
 5. ~~Live-ADV `scan_live.py`~~ — erledigt 2026-09-03, Display = Roh 25,125 °C, [07-read.md](hci-logs/07-read.md)
-6. `python collector/collect.py` → Live-CSV (Büro)
-7. `python collector/dump_history.py --from-extract hci-logs/extract` → History-CSV (Capture-Beleg)
-8. `python dashboard/server.py` → `http://127.0.0.1:8765/`
-9. GATT-Dump Büro: `python collector/dump_history.py --address f4:db:00:00:00:d9`
-10. Geräteliste 5 Räume in `dashboard/rooms.json`, dann Live+History für alle (Phase 7)
+6. **Feld Büro-MVP:** `python collector/mvp_buero.py --address f4:db:00:00:00:d9` (Live-CSV + GATT-Dump + Vergleich + Evidence)
+7. ~~Extract-History + Dashboard~~ — Code da; `dump_history.py --from-extract` / `dashboard/server.py`
+8. Gerät 2–5: Zugehörigkeit, Display vs. `/16`, dann `confirmed`/`encoding_checked` in `rooms.json`
+9. `dump_history.py --address …` je bestätigter MAC (oder `--all-rooms`)
 
-**Nicht** als Nächstes `0x18`/`0x04`.
+**Nicht** als Nächstes `0x18`/`0x04`, SQLite, Alarme.

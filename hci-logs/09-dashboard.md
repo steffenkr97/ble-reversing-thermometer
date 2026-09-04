@@ -2,7 +2,7 @@
 
 **Gerät (Allowlist):** `f4:db:00:00:00:d9` (Büro)  
 **Code:** `dashboard/server.py`, `dashboard/thermo_dash.py`, `dashboard/static/`  
-**Tests:** `python -m unittest discover -s dashboard -p "test_*.py"` — 25 Tests  
+**Tests:** `python -m unittest discover -s dashboard -p "test_*.py"`  
 **Encoding:** unverändert `int16le / 16` ([06-encoding.md](06-encoding.md), [08-collect.md](08-collect.md))
 
 Kein BLE, kein GATT, keine Cloud. Der Server **liest** nur: Live-CSV aus `data/`, optionale History-CSV, und die schon exportierten HCI-Extracts. Es gibt keine Writes auf `FFF5`.
@@ -30,7 +30,7 @@ Ohne Live-CSV (Collector noch nicht gelaufen) zeigt die UI die **HCI-Belege** vo
 
 ## Allowlist
 
-`dashboard/rooms.json` — nur eigene Geräte. Aktuell ein Eintrag: Büro. Fremde MACs in CSV/Extracts werden verworfen. Weitere Räume (Phase 7) hier ergänzen, nicht „erstes ThermoBeacon“.
+`dashboard/rooms.json` — eigene Geräte und sichtbare Kandidaten. Büro `confirmed` + `encoding_checked`. Vier Capture-MACs als Kandidaten (`confirmed: false`), nicht als eigene Räume annehmen. Fremde MACs außerhalb der Datei werden verworfen. Capture-ADV nur `encoding_checked` (Büro), bis Gerät 2–5 gegen Display geprüft sind. [11-rooms.md](11-rooms.md).
 
 ## Quellen
 
@@ -43,7 +43,7 @@ Ohne Live-CSV (Collector noch nicht gelaufen) zeigt die UI die **HCI-Belege** vo
 
 History hat **keine Geräte-Wanduhr**. `timestamp_inferred` ist Hypothese **10 min** (ADV-Counter/Count ≈ 600 s) — [10-history-dump.md](10-history-dump.md). Die Capture-Zeitstempel in `history_capture` sind Dump-Zeit, nicht Gerätezeit — die UI nutzt dort den Index.
 
-`parse_adv_manufacturer` bleibt auf die Büro-MAC begrenzt. Capture-ADV anderer MACs erscheint deshalb nicht, auch wenn sie später in `rooms.json` stehen, bis der Parser gegen Display geprüft ist.
+`parse_adv_manufacturer` für Capture-ADV nur mit `encoding_checked`-MACs. Capture-ADV anderer MACs erscheint deshalb nicht, auch wenn sie in `rooms.json` stehen, bis der Parser gegen Display geprüft ist.
 
 Zeilen aus `old/*.cfa` werden übersprungen: die 2018-Zeitstempel sind Geräteuhr, nicht Wanduhr, und würden die Zeitachse unlesbar machen.
 

@@ -2,12 +2,12 @@
 
 **Gerät:** `f4:db:00:00:00:d9`  
 **Encoding-Beleg:** [03-advertising.md](03-advertising.md), [06-encoding.md](06-encoding.md), [07-read.md](07-read.md)  
-**Code:** `collector/collect.py`, `collector/thermo_store.py` (Scan über `collector/scan_live.py`, Parser `collector/thermo_parse.py`)  
-**Tests:** `python -m unittest discover -s collector -p "test_*.py"` — 27 Tests OK (`test_thermo_parse` 11, `test_thermo_store` 5, `test_scan_live` 7, `test_collect` 4)
+**Code:** `collector/collect.py`, `collector/thermo_store.py` (Scan über `collector/scan_live.py`, Parser `collector/thermo_parse.py`, Allowlist `collector/thermo_rooms.py`)  
+**Tests:** `python -m unittest discover -s collector -p "test_*.py"`
 
 Phase-4-Code ist im Repo. ADV-Scan am Büro-Gerät ist durch ([07-read.md](07-read.md)); `collect.py` → CSV noch nicht.
 
-Live-CSV = `collect.py` über ADV_IND. GATT-Probe bleibt `read_thermometer_data.py`. Der Collector verbindet nicht und schreibt nicht auf `FFF5`.
+`collector/collect.py` sammelt Live-Werte **nur über ADV_IND** (kein Connect, kein GATT-Kick). Filter ist die Allowlist in `dashboard/rooms.json` (Payload-MAC), nicht der Gerätename. Ohne `--mac` ein Sample je Allowlist-Treffer in die jeweilige CSV. GATT-Probe bleibt `read_thermometer_data.py`. Der Collector verbindet nicht und schreibt nicht auf `FFF5`.
 
 ## Abhängigkeit
 
@@ -25,35 +25,39 @@ ModuleNotFoundError: No module named 'bleak'
 
 ```
 python collector/collect.py
+python collector/collect.py --mac f4:db:00:00:00:d9
 python collector/collect.py --once
 python collector/collect.py --interval 60
 python collector/collect.py --timeout 15 --outdir data
-python collector/collect.py --output PATH
+python collector/collect.py --output PATH --mac f4:db:00:00:00:d9
 python collector/collect.py --address f4:db:00:00:00:d9
 ```
 
 | Flag | Bedeutung |
 |------|-----------|
-| `--once` | ein Sample, dann Exit. **Standard**, wenn `--interval` fehlt (auch ohne Flag). |
+| `--once` | ein Scan-Fenster, dann Exit. **Standard**, wenn `--interval` fehlt (auch ohne Flag). |
 | `--interval SEK` | Loop: Scan, schreiben oder Timeout loggen, dann `sleep`. Unverträglich mit `--once`. Muss `> 0` sein. |
 | `--timeout SEK` | Scan-Timeout **pro Versuch**, Standard **15**. Muss `> 0` sein. |
 | `--outdir DIR` | Verzeichnis wenn `--output` fehlt, Standard `data` |
-| `--output PATH` | feste CSV-Datei (sonst `default_csv_path`) |
-| `--address ADDR` | zusätzlich `device.address` an `scan_live` (Linux/Windows: MAC, macOS: UUID). Die MAC **im Manufacturer-Payload** bleibt Pflicht (`TARGET_MAC`). |
+| `--output PATH` | feste CSV-Datei; braucht genau ein `--mac` |
+| `--mac MAC` | nur diese Payload-MAC (muss in `rooms.json` stehen) |
+| `--rooms PATH` | Allowlist, Standard `dashboard/rooms.json` |
+| `--address ADDR` | zusätzlich `device.address` an `scan_live` (Linux/Windows: MAC, macOS: UUID). Payload-MAC bleibt Pflicht. |
 
 `--once` und `--interval` zusammen → argparse-Fehler (`SystemExit`).
 
-Nur Advertising. Filter ist die Payload-MAC (`TARGET_MAC`), nicht der Gerätename. Framing wie in [07-read.md](07-read.md): `assemble_mfg_frame` → `parse_adv_manufacturer`.
+Nur Advertising. Filter ist die Payload-MAC gegen die Allowlist, nicht der Gerätename. Framing wie in [07-read.md](07-read.md): `assemble_mfg_frame` → `parse_adv_manufacturer(..., allowed_macs=…)`. Ohne Allowlist-Argument parst der Parser nur die Büro-MAC.
 
 ## Ablauf
 
-CSV-Pfad **vor dem ersten Sample**: `--output` oder `default_csv_path(TARGET_MAC, outdir)`. Die Datei entsteht erst beim ersten Treffer (`append_sample`).
+CSV-Pfad: `--output` (ein MAC) oder `default_csv_path(mac, outdir)` **je Treffer**. Die Datei entsteht erst beim ersten Sample (`append_sample`).
 
 ### `--once` (Default)
 
-1. `scan_live(timeout, address)`
-2. Treffer: eine CSV-Zeile, Sample auf stdout (`format_sample` plus `geschrieben: PATH`), Exit **0**
-3. Timeout: Meldung auf stderr (`Kein Live-Sample innerhalb von … s (Ziel-MAC …).`), Exit **1** — keine Messzeile
+1. Scan der Allowlist (`scan_live` bei einem MAC, sonst `scan_live_many`)
+2. Treffer: je MAC eine CSV-Zeile, Sample auf stdout (`format_sample` plus `geschrieben: PATH`), Exit **0** wenn mindestens ein Sample
+3. Timeout ohne Treffer: Meldung auf stderr (`Kein Live-Sample innerhalb von … s (Allowlist …).`), Exit **1** — keine Messzeile
+4. Teiltreffer: Exit 0, fehlende MACs auf stderr
 
 ### `--interval SEK`
 
@@ -99,10 +103,4 @@ Details: [04-opcodes.md](04-opcodes.md). GATT-Reads (`1A` / `01` / `07`) bleiben
 
 ADV-Scan am Büro-Gerät ist durch ([07-read.md](07-read.md)): Display **25,125 °C = Roh `/16`**, Hum ±3 %, MAC stimmt. **Kein +10** am 2026-09-03.
 
-`collect.py` → CSV ist **noch nicht gelaufen**. Als Nächstes:
-
-```
-python collector/collect.py
-```
-
-bzw. `--interval 60`. Unittests (Store, `assemble_mfg_frame`, gemocktes `scan_live`) bleiben grün.
+`collect.py` → CSV ist **noch nicht am Büro gelaufen**. Feldlauf: `python collector/mvp_buero.py` oder `collect.py --mac f4:db:00:00:00:d9`. Allowlist: [11-rooms.md](11-rooms.md).

@@ -146,7 +146,9 @@ class TestCollectOnceCsv(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "out.csv")
             with _mock_scan_live(_ADV):
-                rc = _run_main(["--once", "--output", path, "--timeout", "1"])
+                rc = _run_main(
+                    ["--once", "--output", path, "--timeout", "1", "--mac", _ADV.mac]
+                )
             self.assertEqual(rc, 0)
             self.assertTrue(os.path.isfile(path), "CSV fehlt nach --once")
             fieldnames, rows = _read_csv_rows(path)
@@ -169,7 +171,17 @@ class TestCollectOnceCsv(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "out.csv")
             with _mock_scan_live(None):
-                rc = _run_main(["--once", "--output", path, "--timeout", "1"])
+                rc = _run_main(
+                    [
+                        "--once",
+                        "--output",
+                        path,
+                        "--timeout",
+                        "1",
+                        "--mac",
+                        "f4:db:00:00:00:d9",
+                    ]
+                )
             self.assertEqual(rc, 1)
             if not os.path.isfile(path):
                 return
@@ -205,6 +217,13 @@ class TestCollectArgparse(unittest.TestCase):
         if not hasattr(args, "outdir"):
             self.skipTest("kein --outdir")
         self.assertEqual(args.outdir, "data")
+
+    def test_output_without_mac_errors_when_many_rooms(self):
+        collect = _require_collect()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "out.csv")
+            rc = _run_main(["--once", "--output", path, "--timeout", "1"])
+            self.assertEqual(rc, 2)
 
 
 if __name__ == "__main__":
