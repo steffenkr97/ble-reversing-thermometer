@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lokales ThermoBeacon-Dashboard. Nur Lesen, kein BLE, kein Cloud."""
+"""Lokales ThermoBeacon-Dashboard. HTTP; Writes nur von localhost. Kein BLE hier."""
 from __future__ import annotations
 
 import argparse
@@ -7,12 +7,15 @@ import json
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import List, Optional
+from typing import Callable, List, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+_COLLECTOR = os.path.join(os.path.dirname(_HERE), "collector")
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
+if _COLLECTOR not in sys.path:
+    sys.path.insert(0, _COLLECTOR)
 
 from thermo_dash import (  # noqa: E402
     DEFAULT_DATA_DIR,
@@ -20,6 +23,14 @@ from thermo_dash import (  # noqa: E402
     DEFAULT_ROOMS_PATH,
     DashStore,
     KNOWN_SOURCES,
+)
+from thermo_rooms import (  # noqa: E402
+    RoomsError,
+    add_room,
+    delete_room,
+    load_rooms,
+    save_rooms,
+    update_room,
 )
 
 STATIC_DIR = os.path.join(_HERE, "static")
@@ -99,7 +110,33 @@ def content_type(path: str) -> str:
     }.get(ext, "application/octet-stream")
 
 
-def make_handler(store: DashStore):
+def client_is_local(host: str) -> bool:
+    return host in ("127.0.0.1", "::1", "localhost")
+
+
+def _room_id_from_path(path: str) -> Optional[str]:
+    prefix = "/api/rooms/"
+    if not path.startswith(prefix):
+        return None
+    room_id = unquote(path[len(prefix) :]).strip()
+    return room_id or None
+
+
+def idle_status() -> dict:
+    return {
+        "ble": False,
+        "phase": "idle",
+        "started_at": None,
+        "live_interval_sec": None,
+        "message": "Dashboard ohne BLE-Worker",
+        "devices": {},
+    }
+
+
+def make_handler(
+    store: DashStore,
+    status_provider: Optional[Callable[[], dict]] = None,
+):
     class DashboardHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args) -> None:
             sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
@@ -116,6 +153,41 @@ def make_handler(store: DashStore):
         def _send_json(self, payload: dict, status: int = 200) -> None:
             code, ctype, body = json_bytes(payload, status)
             self._send(code, ctype, body)
+
+        def _read_json(self) -> Optional[dict]:
+            raw_len = self.headers.get("Content-Length") or "0"
+            try:
+                length = int(raw_len)
+            except ValueError:
+                self._send_json({"error": "Content-Length ungültig"}, 400)
+                return None
+            if length < 0 or length > 65536:
+                self._send_json({"error": "Body zu groß"}, 400)
+                return None
+            raw = self.rfile.read(length) if length else b"{}"
+            if not raw:
+                return {}
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self._send_json({"error": "JSON ungültig"}, 400)
+                return None
+            if payload is None:
+                return {}
+            if not isinstance(payload, dict):
+                self._send_json({"error": "JSON-Objekt erwartet"}, 400)
+                return None
+            return payload
+
+        def _require_local(self) -> bool:
+            if client_is_local(self.client_address[0]):
+                return True
+            self._send_json({"error": "Writes nur von localhost"}, 403)
+            return False
+
+        def _rooms_payload(self) -> dict:
+            store.refresh(force=True)
+            return {"rooms": store.rooms}
 
         def do_GET(self) -> None:  # noqa: N802
             parsed = urlparse(self.path)
@@ -134,10 +206,29 @@ def make_handler(store: DashStore):
                 body = handle.read()
             self._send(200, content_type(static_path), body)
 
+        def do_POST(self) -> None:  # noqa: N802
+            path = urlparse(self.path).path or "/"
+            if not path.startswith("/api/"):
+                self._send(404, "text/plain; charset=utf-8", b"nicht gefunden\n")
+                return
+            self._api_write("POST", path)
+
+        def do_PATCH(self) -> None:  # noqa: N802
+            path = urlparse(self.path).path or "/"
+            self._api_write("PATCH", path)
+
+        def do_DELETE(self) -> None:  # noqa: N802
+            path = urlparse(self.path).path or "/"
+            self._api_write("DELETE", path)
+
         def _api(self, path: str, query: dict) -> None:
             try:
                 if path == "/api/overview":
                     self._send_json(store.overview())
+                    return
+                if path == "/api/status":
+                    provider = status_provider or idle_status
+                    self._send_json(provider())
                     return
                 if path == "/api/samples":
                     mac = (query.get("mac") or [None])[0]
@@ -163,6 +254,54 @@ def make_handler(store: DashStore):
             except FileNotFoundError as exc:
                 self._send_json({"error": "Datei fehlt", "detail": str(exc)}, 500)
             except Exception as exc:  # noqa: BLE001 — API soll nicht den Thread killen
+                self._send_json({"error": "intern", "detail": str(exc)}, 500)
+
+        def _api_write(self, method: str, path: str) -> None:
+            if not self._require_local():
+                return
+            try:
+                if method == "POST" and path == "/api/rooms":
+                    body = self._read_json()
+                    if body is None:
+                        return
+                    name = str(body.get("name") or "").strip()
+                    mac = str(body.get("mac") or "").strip()
+                    rooms = add_room(load_rooms(store.rooms_path), name, mac)
+                    save_rooms(store.rooms_path, rooms)
+                    self._send_json(self._rooms_payload(), 201)
+                    return
+                room_id = _room_id_from_path(path)
+                if method == "PATCH" and room_id:
+                    body = self._read_json()
+                    if body is None:
+                        return
+                    fields = {}
+                    if "name" in body:
+                        fields["name"] = body.get("name")
+                    if "confirmed" in body:
+                        fields["confirmed"] = body.get("confirmed")
+                    if "encoding_checked" in body:
+                        fields["encoding_checked"] = body.get("encoding_checked")
+                    if "note" in body:
+                        fields["note"] = body.get("note")
+                    rooms = update_room(load_rooms(store.rooms_path), room_id, **fields)
+                    save_rooms(store.rooms_path, rooms)
+                    self._send_json(self._rooms_payload())
+                    return
+                if method == "DELETE" and room_id:
+                    length = int(self.headers.get("Content-Length") or 0)
+                    if length:
+                        self.rfile.read(length)
+                    rooms = delete_room(load_rooms(store.rooms_path), room_id)
+                    save_rooms(store.rooms_path, rooms)
+                    self._send_json(self._rooms_payload())
+                    return
+                self._send_json({"error": "nicht gefunden"}, 404)
+            except RoomsError as exc:
+                self._send_json({"error": str(exc)}, 400)
+            except FileNotFoundError as exc:
+                self._send_json({"error": "Datei fehlt", "detail": str(exc)}, 500)
+            except Exception as exc:  # noqa: BLE001
                 self._send_json({"error": "intern", "detail": str(exc)}, 500)
 
     return DashboardHandler

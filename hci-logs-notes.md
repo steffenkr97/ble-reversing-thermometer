@@ -21,4 +21,5 @@ Captures liegen unter `hci-logs/*.cfa` (Android-btsnoop, OnePlus 5T), nicht unte
 | [09-dashboard.md](hci-logs/09-dashboard.md) | Lokales Dashboard (CSV + HCI-Beleg), kein BLE |
 | [10-history-dump.md](hci-logs/10-history-dump.md) | Phase 6: History-Dump, Extract-Export, Intervall-Hypothese 10 min |
 | [11-rooms.md](hci-logs/11-rooms.md) | Phase 7: Allowlist 5 Räume, Collector je MAC, Büro-MVP-CLI |
+| [12-app.md](hci-logs/12-app.md) | Phase 9: lokale App, Room-CRUD, History seit letztem Abruf |
 | [extract/](hci-logs/extract/) | CSV-Rohdumps aus `collector/parse_btsnoop.py` (inkl. `pairs.csv`) |

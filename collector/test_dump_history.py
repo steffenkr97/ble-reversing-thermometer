@@ -102,6 +102,24 @@ class TestFetchPages(unittest.TestCase):
         self.assertEqual(len(pages), 1)
         self.assertEqual(calls["n"], 2)
 
+    def test_custom_plan_only_requested_pages(self):
+        writes = []
+
+        async def fake(payload):
+            writes.append(bytes(payload))
+            if payload == build_history_07_write(6, 1):
+                return GOLD_P6
+            self.fail("unerwarteter Write {}".format(payload.hex()))
+
+        pages = asyncio.run(
+            dump_history.fetch_history_pages(
+                fake, 7, retries=0, plan=[(6, 1)]
+            )
+        )
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].index, 6)
+        self.assertEqual(len(writes), 1)
+
     def test_max_pages(self):
         async def fake(payload):
             return GOLD_P0 if payload == build_history_07_write(0, 3) else GOLD_P3

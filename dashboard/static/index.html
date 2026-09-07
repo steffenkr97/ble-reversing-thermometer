@@ -17,6 +17,27 @@
       <div class="top-meta" id="top-meta">lädt…</div>
     </header>
 
+    <section class="sync-bar" id="sync-bar" aria-live="polite">Sync: lädt…</section>
+
+    <section class="panel device-form" aria-label="Gerät hinzufügen">
+      <div class="panel-head">
+        <div>
+          <h2>Geräte</h2>
+          <p class="hint">MAC + Anzeigename, maximal 5. Über die UI hinzugefügte Geräte gelten als eigene (confirmed). Kandidaten werden nicht per GATT angefasst.</p>
+        </div>
+      </div>
+      <form id="add-device" class="add-row">
+        <label>Anzeigename
+          <input id="add-name" name="name" type="text" required maxlength="80" placeholder="Keller">
+        </label>
+        <label>MAC
+          <input id="add-mac" name="mac" type="text" required maxlength="17" placeholder="f4:db:00:00:00:d9" autocomplete="off">
+        </label>
+        <button type="submit">Speichern</button>
+      </form>
+      <p class="form-error" id="add-error" hidden></p>
+    </section>
+
     <section class="rooms" id="rooms" aria-label="Räume"></section>
 
     <section class="panel">
@@ -60,7 +81,7 @@
     </section>
 
     <footer>
-      <p>Nur eigene Geräte (Allowlist). Kandidaten in rooms.json erst nach Bestätigung. Hum ±3 % zum Display. History-Zeit = Hypothese 10 min. Nicht senden: 0x18 / 0x04.</p>
+      <p>Nur eigene Geräte (Allowlist). Kandidaten erst nach Bestätigung (kein GATT). Hum ±3 % zum Display. History-Zeit = Hypothese 10 min. Nicht senden: 0x18 / 0x04. Start: python app.py</p>
     </footer>
   </div>
   <script src="/app.js"></script>

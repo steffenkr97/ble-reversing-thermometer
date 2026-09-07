@@ -7,6 +7,7 @@ Nur Opcodes 1A / 01 / 07. Intervall 600 s ist Hypothese, kein Fakt.
 from __future__ import annotations
 
 import csv
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -68,6 +69,139 @@ def page_plan(sample_count: int) -> List[Tuple[int, int]]:
     for extra in range(rem):
         pages.append((full * PAGE_RECORDS + extra, 1))
     return pages
+
+
+def page_plan_since(sample_count: int, after_index: int) -> List[Tuple[int, int]]:
+    """page_plan ab der ersten Page, die Indizes > after_index enthält.
+
+    Überlappende Page wird mitgeholt (Merge überschreibt). after_index=-1 = alles.
+    """
+    if after_index < -1:
+        after_index = -1
+    return [
+        (index, count)
+        for index, count in page_plan(sample_count)
+        if index + count - 1 > after_index
+    ]
+
+
+def default_sync_state_path(mac: str, outdir: str = "data") -> str:
+    """Pfad data/sync_<mac12>.json (letzter History-Abruf)."""
+    return os.path.join(outdir, "sync_{}.json".format(mac12(mac)))
+
+
+def load_sync_state(path: str) -> Optional[dict]:
+    if not path or not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as handle:
+        raw = json.load(handle)
+    if not isinstance(raw, dict):
+        return None
+    return raw
+
+
+def write_sync_state(path: str, state: dict) -> None:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+    os.replace(tmp, path)
+
+
+def _row_index(row: dict) -> Optional[int]:
+    raw = row.get("index")
+    if raw is None or raw == "":
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def read_history_csv(path: str) -> List[dict]:
+    """Bestehende History-CSV lesen. Fehlende Datei → []."""
+    if not path or not os.path.isfile(path):
+        return []
+    rows = []
+    with open(path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            index = _row_index(row)
+            if index is None:
+                continue
+            try:
+                record = int(row.get("record") or 0)
+                temp_c = float(row.get("temp_c"))
+                humidity_rh = float(row.get("humidity_rh"))
+            except (TypeError, ValueError):
+                continue
+            rows.append(
+                {
+                    "mac": normalize_mac(row.get("mac") or ""),
+                    "index": index,
+                    "record": record,
+                    "temp_c": temp_c,
+                    "humidity_rh": humidity_rh,
+                    "raw_hex": (row.get("raw_hex") or "").replace(" ", "").lower(),
+                    "timestamp_inferred": (row.get("timestamp_inferred") or "").strip(),
+                }
+            )
+    rows.sort(key=lambda item: (item["index"], item["record"]))
+    return rows
+
+
+def max_history_index(rows: Sequence[dict]) -> Optional[int]:
+    indices = [_row_index(row) for row in rows]
+    present = [i for i in indices if i is not None]
+    if not present:
+        return None
+    return max(present)
+
+
+def merge_history_rows(existing: Sequence[dict], incoming: Sequence[dict]) -> List[dict]:
+    """Nach index mergen; incoming gewinnt. Sortiert nach index."""
+    by_index = {}  # type: Dict[int, dict]
+    for row in existing:
+        index = _row_index(row)
+        if index is None:
+            continue
+        by_index[index] = dict(row)
+        by_index[index]["index"] = index
+    for row in incoming:
+        index = _row_index(row)
+        if index is None:
+            continue
+        item = dict(row)
+        item["index"] = index
+        by_index[index] = item
+    return [by_index[key] for key in sorted(by_index)]
+
+
+def apply_incremental_history(
+    existing: Sequence[dict],
+    incoming: Sequence[dict],
+    sample_count: int,
+    newest_utc: str,
+    interval_sec: float = INTERVAL_SEC_HYPOTHESIS,
+) -> List[dict]:
+    """Merge + Zeitanker. Count-Rückgang (Gerät-Reset) ersetzt die alte CSV."""
+    count = int(sample_count)
+    last = max_history_index(existing)
+    if last is not None and count < last + 1:
+        merged = [dict(row) for row in incoming]
+    else:
+        merged = merge_history_rows(existing, incoming)
+    if not merged:
+        return []
+    newest_index = count - 1 if count > 0 else max_history_index(merged)
+    return apply_inferred_timestamps(
+        merged,
+        newest_utc=newest_utc,
+        interval_sec=interval_sec,
+        newest_index=newest_index,
+    )
 
 
 def assert_allowed_fff5_write(payload: bytes) -> None:

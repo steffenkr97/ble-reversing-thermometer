@@ -522,7 +522,7 @@ class DashStore:
             },
             "notes": [
                 "Allowlist = rooms.json. Kandidaten (confirmed=false) sind nicht automatisch eigene Geräte.",
-                "Live-CSV = collect.py über ADV. History-CSV = dump_history.py (GATT 07 oder Extract).",
+                "App: python app.py (History seit letztem Abruf, dann Live-ADV). CLIs bleiben.",
                 "Capture-ADV nur encoding_checked (Büro). Hum /16 intern; Live ±3 % zum Display.",
             ],
         }

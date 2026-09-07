@@ -167,19 +167,31 @@ Timeout im Loop: nur Meldung auf stderr, Skript läuft weiter.
 
 ---
 
-## 5. Dashboard (lokal, kein BLE)
+## 5. App (Dashboard + Abruf)
 
-Kein venv/bleak nötig. Im Repo-Ordner:
+Mit venv/bleak (Schritt 0). Im Repo-Ordner:
+
+```
+python app.py
+```
+
+Browser: `http://127.0.0.1:8765/`
+
+Beim Start holt die App die History **seit dem letzten Abruf** für jedes bestätigte Gerät (GATT `1A` → `01` → `07`, kein `0x18`/`0x04`). Danach Live-ADV alle 60 s in die CSV. Geräte (MAC + Anzeigename) in der UI speichern, max. 5. Kandidaten werden nicht per GATT angefasst.
+
+Ohne Bluetooth-Adapter:
+
+```
+python app.py --no-ble
+```
+
+oder nur das alte Dashboard:
 
 ```
 python dashboard/server.py
 ```
 
-Browser: `http://127.0.0.1:8765/`
-
-Ohne Live-CSV und ohne History-CSV zeigt die Seite die HCI-Belege vom Büro (Capture-ADV und History-Capture `07`). Nach Schritt 3 erscheint **Live-CSV (ADV)** zuerst. Nach Schritt 6 erscheint der Tab **History-CSV**. Allowlist: `dashboard/rooms.json` (Büro bestätigt, vier Kandidaten gestrichelt). Capture-ADV nur Büro, bis Gerät 2–5 gegen Display geprüft sind (`encoding_checked`). Nicht senden, kein GATT.
-
-Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md), [hci-logs/11-rooms.md](hci-logs/11-rooms.md).
+Ohne Live-CSV und ohne History-CSV zeigt die Seite die HCI-Belege vom Büro. Allowlist: `dashboard/rooms.json`. Details: [hci-logs/12-app.md](hci-logs/12-app.md), [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md).
 
 ---
 

@@ -2,12 +2,12 @@
 
 Dieses Repo reverse-engineert das Bluetooth-Protokoll **eigener** ThermoBeacon-Thermometer. Ziel: Live (ADV) und Vergangenheit (GATT `07`) lokal speichern und im Dashboard zeigen — bis zu **5 Räume**. Keine Hersteller-App.
 
-**Aktuelle Phase:** Phase 7 Allowlist (5 Räume in `rooms.json`). Büro bestätigt + Encoding-Check. Collector schreibt ein Sample je Allowlist-MAC. Büro-MVP-Feldlauf: `mvp_buero.py`. Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** Phase 9 lokale App (`python app.py`). Geräte (MAC + Name) in `rooms.json`, History seit letztem Abruf, Live-ADV im Lauf. Büro bestätigt + Encoding-Check. Nicht `0x18`/`0x04`.
 
 ## Auftrag an Agents
 
-1. **Jetzt:** Am Büro `python collector/mvp_buero.py --address f4:db:00:00:00:d9` (Live-CSV + GATT-Dump + Vergleich). Kandidaten in `dashboard/rooms.json` erst nach Display-Check auf `confirmed`/`encoding_checked` setzen. Hum `/16` nur ±3 % zum Display. `0x18` nicht als Offset-Fakt.
-2. **Danach:** Live-GATT-Dump je bestätigter MAC (`dump_history.py --address …` oder `--all-rooms`). `0x18` / `0x04` nicht senden.
+1. **Jetzt:** Am Büro `python app.py` (History-Sync + Live-CSV + Dashboard) oder `python collector/mvp_buero.py --address f4:db:00:00:00:d9`. Kandidaten in `dashboard/rooms.json` erst nach Display-Check auf `confirmed` setzen. Hum `/16` nur ±3 % zum Display. `0x18` nicht als Offset-Fakt.
+2. **Danach:** Gerät 2–5 bestätigen (UI oder JSON), dann History/Live nur für confirmed. `0x18` / `0x04` nicht senden.
 3. **Nicht:** fremde Geräte, Exploits/PoCs, Fuzzer auf destruktive Kommandos, Firmware knacken.
 
 Nur Geräte auf der Allowlist (`dashboard/rooms.json`). Unklare Bytes als Hypothese markieren, nicht als Fakt. Encoding-Beleg bleibt das Büro-Gerät, bis Gerät 2–5 gegen Display geprüft sind (`encoding_checked`).
@@ -41,6 +41,7 @@ Tabellen und Belege stehen in den MDs, nicht doppelt hier:
 | [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md) | Lokales Dashboard: API, Quellen, Allowlist |
 | [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md) | Phase 6: History-Dump GATT/`--from-extract`, Intervall-Hypothese 10 min |
 | [hci-logs/11-rooms.md](hci-logs/11-rooms.md) | Phase 7: Allowlist 5 Räume, Collector je MAC, Kandidaten |
+| [hci-logs/12-app.md](hci-logs/12-app.md) | Phase 9: lokale App, Room-CRUD, inkrementelle History, Live-Loop |
 | [hci-logs-notes.md](hci-logs-notes.md) | Index + Kalibrier-Hinweis |
 | [ANLEITUNG.md](ANLEITUNG.md) | CLI-Schritte für den Live-Lauf |
 
@@ -49,13 +50,14 @@ Parser: `python collector/parse_btsnoop.py --export hci-logs/extract` (nur Lesen
 ## Repo-Karte
 
 ```
+app.py                               lokale App (Dashboard + BLE-Worker)
 py/                                  ältere User-Skripte (Fuzzer, mini, reader, list_system_ids)
-collector/                           Phase-3–7-Code (Parser, ADV-Scan, Collector, History-Dump, Allowlist, mvp_buero)
-dashboard/                           lokales Frontend (CSV + HCI-Extract, kein BLE)
+collector/                           Phase-3–9-Code (Parser, Collector, History, Allowlist, App-Sync)
+dashboard/                           lokales Frontend (CSV + HCI-Extract; Writes nur localhost)
 data/                                Live-CSV (`data/.gitkeep`; `*.csv` in `.gitignore`)
 research-device/                     nRF-Connect-Logs, ältere Doku
 hci-logs/                            Android HCI-Snoop (.cfa = btsnoop) + Auswertung
-  01-sessions.md … 10-history-dump.md  Befund-MDs
+  01-sessions.md … 12-app.md           Befund-MDs
   extract/                           CSV aus parse_btsnoop.py
   hci_snoop_2025_11_26_14_52_44.cfa  Einstiegs-Capture (App-Sync, History)
   hci_snoop_2025_11_26_15_00_04.cfa  langer History-Dump
@@ -161,7 +163,8 @@ Phase-3-Code: [07-read.md](hci-logs/07-read.md). Phase-4-Collector: [08-collect.
 - Live ohne Connect: `python collector/scan_live.py` (Payload-MAC `f4:db:00:00:00:d9`)
 - Live-CSV: `python collector/collect.py` (Allowlist) bzw. `--mac …` für ein Gerät; `--interval 60`
 - Büro-MVP-Feldlauf: `python collector/mvp_buero.py --address …` — Live-CSV + Dump + History vs. ADV
-- Dashboard: `python dashboard/server.py` — `http://127.0.0.1:8765/` (kein bleak, kein GATT)
+- App: `python app.py` — Dashboard + History-Sync (confirmed) + Live-ADV; `--no-ble` ohne Adapter
+- Dashboard allein: `python dashboard/server.py` — `http://127.0.0.1:8765/` (kein GATT)
 - GATT-Probe: `python collector/read_thermometer_data.py --address …` — CCCD, dann `1A` → `01` → optional `--history INDEX`
 - History-Dump: `python collector/dump_history.py --from-extract hci-logs/extract` (offline) bzw. `--address …` / `--all-rooms`
 - Gerät über MAC oder `--use-system-id` (`2A23`); kein Erstes-Gerät-Fallback
@@ -189,8 +192,9 @@ Stack: Python 3.8+, `bleak>=0.21.0` (`requirements.txt`; ohne bleak scheitert `-
 - [x] Lokales Dashboard (CSV + HCI-Beleg, [09-dashboard.md](hci-logs/09-dashboard.md))
 - [x] History-Dump CLI + Extract-Export 1586 Samples ([10-history-dump.md](hci-logs/10-history-dump.md))
 - [x] Allowlist 5 Einträge in `rooms.json` + Collector je MAC ([11-rooms.md](hci-logs/11-rooms.md)) — 4 Kandidaten unbestätigt
-- [ ] Live-CSV `collect.py` / `mvp_buero.py` am Büro-Gerät (Feld)
-- [ ] History-Dump live am Büro (GATT `07`, alle Pages) — Code da, Gerät offen
+- [x] Lokale App: Room-CRUD, inkrementelle History, Live-Loop ([12-app.md](hci-logs/12-app.md))
+- [ ] Live-CSV `app.py` / `collect.py` / `mvp_buero.py` am Büro-Gerät (Feld)
+- [ ] History-Dump live am Büro (GATT `07`, inkrementell oder voll) — Code da, Gerät offen
 - [ ] Gerät 2–5: Zugehörigkeit + Display vs. `/16`, dann `confirmed`/`encoding_checked`
 - [ ] SQLite/JSONL — **Parkplatz**, nicht in Release 6.1/7
 - [ ] `0x18` / `0x04` gegen Kalibrier-Test — **Parkplatz**, nicht senden

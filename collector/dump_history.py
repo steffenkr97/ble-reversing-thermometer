@@ -11,7 +11,7 @@ import asyncio
 import os
 import sys
 import time
-from typing import Callable, List, Optional, Sequence
+from typing import Callable, List, Optional, Sequence, Tuple
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -228,9 +228,13 @@ async def fetch_history_pages(
     max_pages: Optional[int] = None,
     retries: int = 2,
     on_progress: Optional[Callable[[int, int, History07], None]] = None,
+    plan: Optional[Sequence[Tuple[int, int]]] = None,
 ) -> List[History07]:
-    """Alle 07-Pages gemäß page_plan. write_and_wait(payload) → 20-Byte-Notify oder None."""
-    plan = page_plan(sample_count)
+    """07-Pages gemäß page_plan oder übergebenem Plan. write_and_wait → Notify oder None."""
+    if plan is None:
+        plan = page_plan(sample_count)
+    else:
+        plan = list(plan)
     if max_pages is not None:
         plan = plan[: max_pages]
     pages = []  # type: List[History07]
@@ -324,47 +328,57 @@ def _progress(step: int, total: int, parsed: History07) -> None:
         )
 
 
-async def dump_via_gatt(args: argparse.Namespace, device_address: str, address_was_given: bool) -> int:
+async def gatt_history_pages(
+    device_address: str,
+    mac: str,
+    rooms: Sequence[dict],
+    *,
+    address_was_given: bool = True,
+    notify_timeout: float = 2.0,
+    retries: int = 2,
+    plan_for_count: Optional[Callable[[int], Sequence[Tuple[int, int]]]] = None,
+    on_progress: Optional[Callable[[int, int, History07], None]] = None,
+    log: Optional[Callable[[str], None]] = None,
+) -> Tuple[int, List[History07]]:
+    """Connect, 1A → 01 → 07-Pages. Nur beobachtete Writes. Wirft bei Timeout/ID."""
     from bleak import BleakClient
 
     import read_thermometer_data as probe
 
-    print("Verbinde mit {} ...".format(device_address))
+    def _log(msg: str) -> None:
+        if log is not None:
+            log(msg)
+
+    _log("Verbinde mit {} ...".format(device_address))
     async with BleakClient(device_address, timeout=20.0) as client:
-        print("Verbunden.")
+        _log("Verbunden.")
         sid = await probe._read_system_id(client)
-        rooms = _rooms_or_empty(args)
-        expected_sid = _expected_system_id(args.mac, rooms)
+        expected_sid = _expected_system_id(mac, rooms)
         if sid is None:
             allow_missing = address_was_given or expected_sid is None
-            if expected_sid is not None and probe._macs_equal(device_address, args.mac):
+            if expected_sid is not None and probe._macs_equal(device_address, mac):
                 allow_missing = True
             if allow_missing:
-                print("System ID nicht lesbar; fahre mit gegebener Adresse fort.")
+                _log("System ID nicht lesbar; fahre mit gegebener Adresse fort.")
             else:
-                print("System ID nicht lesbar und nicht auf der Allowlist — Abbruch.")
-                return 1
+                raise RuntimeError("System ID nicht lesbar und nicht auf der Allowlist")
         elif expected_sid is None:
-            print("System ID {} (kein Sollwert in rooms.json).".format(probe._hex(sid)))
+            _log("System ID {} (kein Sollwert in rooms.json).".format(probe._hex(sid)))
         elif sid != expected_sid:
-            print(
-                "System ID {} != Ziel {} — falsches Gerät, Abbruch.".format(
+            raise RuntimeError(
+                "System ID {} != Ziel {} — falsches Gerät".format(
                     probe._hex(sid), probe._hex(expected_sid)
                 )
             )
-            return 1
         else:
-            print("System ID ok: {}".format(probe._hex(sid)))
+            _log("System ID ok: {}".format(probe._hex(sid)))
 
         if probe._find_char(client, CONTROL_CHAR_UUID) is None:
-            print("FFF5 (Control) nicht gefunden.")
-            return 1
+            raise RuntimeError("FFF5 (Control) nicht gefunden")
         if probe._find_char(client, DATA_CHAR_UUID) is None:
-            print("FFF3 (Data) nicht gefunden.")
-            return 1
+            raise RuntimeError("FFF3 (Data) nicht gefunden")
         if not any(probe._uuid_eq(s.uuid, SERVICE_UUID) for s in client.services):
-            print("Service FFE0 nicht gefunden.")
-            return 1
+            raise RuntimeError("Service FFE0 nicht gefunden")
 
         queue = asyncio.Queue()
 
@@ -378,82 +392,109 @@ async def dump_via_gatt(args: argparse.Namespace, device_address: str, address_w
             probe._drain(queue)
             await client.write_gatt_char(CONTROL_CHAR_UUID, payload, response=True)
             return await probe.wait_notify(
-                queue, payload[0], timeout=args.notify_timeout
+                queue, payload[0], timeout=notify_timeout
             )
 
-        print("Sequenz 1A → 01 → 07-Pages")
+        _log("Sequenz 1A → 01 → 07-Pages")
         assert_allowed_fff5_write(bytes([0x1A]))
         raw_1a = await write_and_wait(bytes([0x1A]))
         if raw_1a is None:
-            print("Timeout auf 1A.", file=sys.stderr)
-            return 1
-        print("  Status 1A  raw={}".format(raw_1a.hex()))
+            raise RuntimeError("Timeout auf 1A")
+        _log("  Status 1A  raw={}".format(raw_1a.hex()))
 
         assert_allowed_fff5_write(bytes([0x01]))
         raw_01 = await write_and_wait(bytes([0x01]))
         if raw_01 is None:
-            print("Timeout auf 01.", file=sys.stderr)
-            return 1
+            raise RuntimeError("Timeout auf 01")
         parsed_01 = parse_fff3(raw_01)
         if not isinstance(parsed_01, Count01):
-            print("Antwort auf 01 ist kein Count01: {}".format(raw_01.hex()), file=sys.stderr)
-            return 1
+            raise RuntimeError("Antwort auf 01 ist kein Count01: {}".format(raw_01.hex()))
         sample_count = parsed_01.sample_count
-        plan = page_plan(sample_count)
-        if args.max_pages is not None:
-            plan = plan[: args.max_pages]
-        print(
+        if plan_for_count is None:
+            plan = page_plan(sample_count)
+        else:
+            plan = list(plan_for_count(sample_count))
+        _log(
             "  Count 01   samples={}  pages={}  (~{:.0f} s bei 0,2 s/Page)".format(
                 sample_count, len(plan), len(plan) * 0.2
             )
         )
 
-        t0 = time.monotonic()
-        pages = []
+        pages = []  # type: List[History07]
         try:
-            pages = await fetch_history_pages(
-                write_and_wait,
-                sample_count,
-                max_pages=args.max_pages,
-                retries=args.retries,
-                on_progress=_progress,
-            )
-        except KeyboardInterrupt:
-            print("\nAbbruch während der Pages — schreibe {} bisherige Pages.".format(len(pages)))
+            if plan:
+                pages = await fetch_history_pages(
+                    write_and_wait,
+                    sample_count,
+                    retries=retries,
+                    on_progress=on_progress,
+                    plan=plan,
+                )
         finally:
             try:
                 await client.stop_notify(DATA_CHAR_UUID)
             except Exception:
                 pass
+        return sample_count, pages
 
-        elapsed = time.monotonic() - t0
-        rows = samples_from_pages(pages, args.mac)
-        newest_utc = args.newest_time or iso_utc_now()
-        newest_index = sample_count - 1 if sample_count else None
-        rows = _stamp_rows(rows, args, newest_utc, newest_index)
-        path = resolve_csv_path(args, args.mac)
-        write_history_csv(path, rows)
+
+async def dump_via_gatt(args: argparse.Namespace, device_address: str, address_was_given: bool) -> int:
+    rooms = _rooms_or_empty(args)
+    t0 = time.monotonic()
+    pages = []  # type: List[History07]
+    sample_count = 0
+    try:
+        def plan_for_count(count: int):
+            plan = page_plan(count)
+            if args.max_pages is not None:
+                return plan[: args.max_pages]
+            return plan
+
+        sample_count, pages = await gatt_history_pages(
+            device_address,
+            args.mac,
+            rooms,
+            address_was_given=address_was_given,
+            notify_timeout=args.notify_timeout,
+            retries=args.retries,
+            plan_for_count=plan_for_count,
+            on_progress=_progress,
+            log=print,
+        )
+    except KeyboardInterrupt:
+        print("\nAbbruch während der Pages — schreibe {} bisherige Pages.".format(len(pages)))
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    elapsed = time.monotonic() - t0
+    rows = samples_from_pages(pages, args.mac)
+    newest_utc = args.newest_time or iso_utc_now()
+    newest_index = sample_count - 1 if sample_count else None
+    rows = _stamp_rows(rows, args, newest_utc, newest_index)
+    path = resolve_csv_path(args, args.mac)
+    write_history_csv(path, rows)
+    print(
+        "fertig: {} Samples aus {} Pages in {:.1f} s".format(
+            len(rows), len(pages), elapsed
+        )
+    )
+    print("geschrieben: {}".format(path))
+    if rows and not args.no_timestamps:
         print(
-            "fertig: {} Samples aus {} Pages in {:.1f} s".format(
-                len(rows), len(pages), elapsed
+            "timestamp_inferred: Anker {}  interval={} s (Hypothese)".format(
+                rows[-1].get("timestamp_inferred") or newest_utc,
+                args.interval_sec,
             )
         )
-        print("geschrieben: {}".format(path))
-        if rows and not args.no_timestamps:
-            print(
-                "timestamp_inferred: Anker {}  interval={} s (Hypothese)".format(
-                    rows[-1].get("timestamp_inferred") or newest_utc,
-                    args.interval_sec,
-                )
-            )
-        if sample_count and len(rows) < sample_count:
-            print(
-                "Hinweis: CSV hat {} von {} Samples (--max-pages?).".format(
-                    len(rows), sample_count
-                ),
-                file=sys.stderr,
-            )
-        return 0
+    if sample_count and len(rows) < sample_count:
+        print(
+            "Hinweis: CSV hat {} von {} Samples (--max-pages?).".format(
+                len(rows), sample_count
+            ),
+            file=sys.stderr,
+        )
+    return 0
 
 
 async def async_main(args: argparse.Namespace) -> int:

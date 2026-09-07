@@ -18,8 +18,11 @@
       "HCI-Beleg GATT 07. Index 0 = älteste. Capture-Zeit ist Dump-Zeit, nicht Gerätezeit.",
   };
 
+  var REFRESH_MS = 15000;
+
   var state = {
     overview: null,
+    status: null,
     roomId: null,
     source: null,
     samples: [],
@@ -75,15 +78,25 @@
     return out;
   }
 
-  function api(path) {
-    return fetch(path, { cache: "no-store" }).then(function (res) {
-      if (!res.ok) {
-        return res.json().then(function (body) {
+  function api(path, options) {
+    var opts = options || {};
+    opts.cache = "no-store";
+    return fetch(path, opts).then(function (res) {
+      return res.json().then(function (body) {
+        if (!res.ok) {
           throw new Error(body.error || res.statusText);
-        });
-      }
-      return res.json();
+        }
+        return body;
+      });
     });
+  }
+
+  function apiWrite(method, path, body) {
+    var opts = { method: method, headers: { "Content-Type": "application/json" } };
+    if (body !== undefined) {
+      opts.body = JSON.stringify(body);
+    }
+    return api(path, opts);
   }
 
   function renderRooms() {
@@ -129,6 +142,35 @@
       btn.querySelector(".name").textContent = room.name;
       btn.querySelector(".mac").textContent = room.mac;
       btn.querySelector(".status").textContent = status;
+      var actions = document.createElement("div");
+      actions.className = "room-actions";
+      if (!room.confirmed) {
+        var confirmBtn = document.createElement("button");
+        confirmBtn.type = "button";
+        confirmBtn.textContent = "Bestätigen";
+        confirmBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          confirmRoom(room);
+        });
+        actions.appendChild(confirmBtn);
+      }
+      var renameBtn = document.createElement("button");
+      renameBtn.type = "button";
+      renameBtn.textContent = "Umbenennen";
+      renameBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        renameRoom(room);
+      });
+      actions.appendChild(renameBtn);
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.textContent = "Entfernen";
+      delBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        removeRoom(room);
+      });
+      actions.appendChild(delBtn);
+      btn.appendChild(actions);
       btn.addEventListener("click", function () {
         state.roomId = room.id;
         state.source = pickDefaultSource(room);
@@ -149,6 +191,41 @@
       " Live-CSV · " +
       (ov.sample_count || 0) +
       " Punkte gesamt<br>Allowlist rooms.json · Encoding int16le / 16";
+  }
+
+  function renderStatus() {
+    var host = $("sync-bar");
+    if (!host) return;
+    var st = state.status;
+    if (!st) {
+      host.textContent = "Sync: keine Status-API";
+      return;
+    }
+    var phase = st.phase || "idle";
+    var msg = st.message || "";
+    var prefix = st.ble ? "BLE an" : "Ohne BLE";
+    var html = prefix + " · " + phase;
+    if (msg) html += " — " + msg;
+    var devices = st.devices || {};
+    var keys = Object.keys(devices);
+    if (keys.length) {
+      html += "<br>";
+      html += keys
+        .map(function (mac) {
+          var d = devices[mac] || {};
+          var hist = d.history || {};
+          var live = d.live || {};
+          var bits = [d.name || mac];
+          if (hist.state) bits.push("History " + hist.state);
+          if (hist.new_samples) bits.push("+" + hist.new_samples);
+          if (hist.error) bits.push(hist.error);
+          if (live.last_sample_at) bits.push("Live " + fmtTime(live.last_sample_at));
+          if (live.error) bits.push(live.error);
+          return bits.join(" · ");
+        })
+        .join(" · ");
+    }
+    host.innerHTML = html;
   }
 
   function renderTabs() {
@@ -434,7 +511,7 @@
     if (!payload.samples || !payload.samples.length) {
       empty.hidden = false;
       empty.textContent =
-        "Keine Daten für diese Quelle. Live: python collector/collect.py — History: python collector/dump_history.py --from-extract hci-logs/extract";
+        "Keine Daten für diese Quelle. App: python app.py — oder collect.py / dump_history.py";
     } else {
       empty.hidden = true;
     }
@@ -461,24 +538,125 @@
     });
   }
 
+  function applyOverview(ov, resetSource) {
+    state.overview = ov;
+    var rooms = (ov && ov.rooms) || [];
+    var current = roomOf(ov, state.roomId);
+    if (!current) {
+      current = rooms[0] || null;
+      state.roomId = current ? current.id : null;
+      state.source = pickDefaultSource(current);
+    } else if (resetSource || !state.source) {
+      state.source = pickDefaultSource(current);
+    }
+    renderMeta();
+    renderRooms();
+    renderTabs();
+  }
+
+  function loadOverview() {
+    return api("/api/overview").then(function (ov) {
+      applyOverview(ov, false);
+      return ov;
+    });
+  }
+
+  function loadStatus() {
+    return api("/api/status")
+      .then(function (st) {
+        state.status = st;
+        renderStatus();
+        return st;
+      })
+      .catch(function () {
+        state.status = null;
+        renderStatus();
+      });
+  }
+
+  function refresh() {
+    return loadOverview()
+      .then(function () {
+        return Promise.all([loadSamples(), loadStatus()]);
+      })
+      .catch(function (err) {
+        $("top-meta").textContent = "API-Fehler: " + err.message;
+      });
+  }
+
+  function confirmRoom(room) {
+    return apiWrite("PATCH", "/api/rooms/" + encodeURIComponent(room.id), {
+      confirmed: true,
+      encoding_checked: true,
+    }).then(refresh);
+  }
+
+  function renameRoom(room) {
+    var name = window.prompt("Anzeigename", room.name);
+    if (name == null) return;
+    name = String(name).trim();
+    if (!name || name === room.name) return;
+    return apiWrite("PATCH", "/api/rooms/" + encodeURIComponent(room.id), {
+      name: name,
+    }).then(refresh);
+  }
+
+  function removeRoom(room) {
+    if (!window.confirm("Gerät „" + room.name + "“ entfernen?")) return;
+    return apiWrite("DELETE", "/api/rooms/" + encodeURIComponent(room.id)).then(function () {
+      if (state.roomId === room.id) {
+        state.roomId = null;
+        state.source = null;
+      }
+      return refresh();
+    });
+  }
+
+  function bindAddForm() {
+    var form = $("add-device");
+    if (!form) return;
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var err = $("add-error");
+      err.hidden = true;
+      var name = $("add-name").value.trim();
+      var mac = $("add-mac").value.trim();
+      apiWrite("POST", "/api/rooms", { name: name, mac: mac })
+        .then(function () {
+          $("add-name").value = "";
+          $("add-mac").value = "";
+          return refresh();
+        })
+        .catch(function (e) {
+          err.hidden = false;
+          err.textContent = e.message;
+        });
+    });
+  }
+
   function boot() {
     bindChart();
+    bindAddForm();
     window.addEventListener("resize", drawChart);
-    return api("/api/overview").then(function (ov) {
-      state.overview = ov;
-      var first = (ov.rooms && ov.rooms[0]) || null;
-      state.roomId = first ? first.id : null;
-      state.source = pickDefaultSource(first);
-      renderMeta();
-      renderRooms();
-      renderTabs();
-      return loadSamples();
-    });
+    return loadOverview()
+      .then(function (ov) {
+        var first = (ov.rooms && ov.rooms[0]) || null;
+        if (!state.roomId) {
+          state.roomId = first ? first.id : null;
+          state.source = pickDefaultSource(first);
+        }
+        renderRooms();
+        renderTabs();
+        return Promise.all([loadSamples(), loadStatus()]);
+      })
+      .then(function () {
+        window.setInterval(refresh, REFRESH_MS);
+      });
   }
 
   boot().catch(function (err) {
     $("top-meta").textContent = "API-Fehler: " + err.message;
     $("empty").hidden = false;
-    $("empty").textContent = "Dashboard-API nicht erreichbar. python dashboard/server.py";
+    $("empty").textContent = "API nicht erreichbar. python app.py oder python dashboard/server.py";
   });
 })();

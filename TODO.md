@@ -4,7 +4,7 @@
 
 Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 00 DB F4`.
 
-**Aktuelle Phase:** Phase 7 Allowlist in `rooms.json` (Büro bestätigt, 4 Kandidaten). Collector je MAC. Büro-MVP-Feldlauf: `mvp_buero.py`. Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** Phase 9 lokale App (`python app.py`). Allowlist in `rooms.json` (Büro bestätigt, 4 Kandidaten). History seit letztem Abruf, Live-ADV im Lauf. Nicht `0x18`/`0x04`.
 
 ---
 
@@ -19,7 +19,7 @@ Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 
 | HCI-Capture der offiziellen App | erledigt (`hci-logs/*.cfa`, [01-sessions.md](hci-logs/01-sessions.md)) |
 | Encoding von °C / %rF | `/16`; Live: Temp = Display 25,125 °C; Hum ±3 %; Capture Nov 2025 hatte +10 |
 | Collector mit Speichern | Code: Allowlist je MAC; ADV-Scan live OK; CSV-Lauf am Büro noch offen |
-| Lokales Dashboard | Code da (`dashboard/server.py`); 5 Raumkarten, 4 Kandidaten |
+| Lokales Dashboard / App | `python app.py` (Sync+UI); `dashboard/server.py` ohne BLE |
 | History-Dump / 5 Geräte | Dump-CLI + Extract 1586 Samples + `--all-rooms`; Live-GATT und Display-Check 2–5 offen |
 
 Live-CSV = `collect.py` über ADV (kein GATT). GATT-Probe bleibt `read_thermometer_data.py`. `fuzzer.py` nur für bereits beobachtete Kommandos; Blacklist `0x04`, `0x05`, `0xFF`, `0xFE` bleibt unangetastet.
@@ -150,6 +150,19 @@ Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-
 
 ---
 
+## Phase 9 — Lokale App
+
+Ein Prozess: Geräte speichern, History seit letztem Abruf, Live-ADV, Dashboard. [12-app.md](hci-logs/12-app.md).
+
+- [x] `python app.py` — HTTP + BLE-Worker (`--no-ble` ohne Adapter)
+- [x] Room-CRUD (MAC + Anzeigename, max. 5, nur localhost)
+- [x] Inkrementeller History-Dump (nur confirmed, `1A`/`01`/`07`)
+- [x] Live-ADV-Loop nach dem Sync
+- [x] Status-API + Auto-Refresh
+- [ ] Feldlauf am Büro-Gerät (`python app.py`)
+
+---
+
 ## Bewusst nicht tun
 
 - Fuzzer auf Blacklist oder unbekannte Multi-Byte-Writes ausweiten
@@ -168,7 +181,8 @@ Bewusst nicht bauen, bis 5 bestätigte Räume wehtun oder ein Kalibrier-Test ans
 - History-Intervall 10 min als Fakt (erst mit zwei Live-Counts in `data/interval_evidence.jsonl`)
 - Hum-Anzeige enger als ±3 %
 - `0x18` / `0x04` nur in einem bewussten Kalibrier-Test
-- Dashboard-Komfort: Auto-Refresh, Batterie in der CSV, Alarme, Live+History in einem Chart
+- Dashboard-Komfort: Batterie in der CSV, Alarme, Live+History in einem Chart
+  (Auto-Refresh und Geräte-UI: Phase 9)
 
 ---
 
@@ -179,9 +193,9 @@ Bewusst nicht bauen, bis 5 bestätigte Räume wehtun oder ein Kalibrier-Test ans
 3. ~~Parser + ADV-CLI + GATT-Probe (Code)~~ — erledigt, [07-read.md](hci-logs/07-read.md)
 4. ~~Collector ADV→CSV (Code)~~ — erledigt, [08-collect.md](hci-logs/08-collect.md)
 5. ~~Live-ADV `scan_live.py`~~ — erledigt 2026-09-03, Display = Roh 25,125 °C, [07-read.md](hci-logs/07-read.md)
-6. **Feld Büro-MVP:** `python collector/mvp_buero.py --address f4:db:00:00:00:d9` (Live-CSV + GATT-Dump + Vergleich + Evidence)
-7. ~~Extract-History + Dashboard~~ — Code da; `dump_history.py --from-extract` / `dashboard/server.py`
-8. Gerät 2–5: Zugehörigkeit, Display vs. `/16`, dann `confirmed`/`encoding_checked` in `rooms.json`
-9. `dump_history.py --address …` je bestätigter MAC (oder `--all-rooms`)
+6. **Feld Büro:** `python app.py` oder `python collector/mvp_buero.py --address f4:db:00:00:00:d9`
+7. ~~Extract-History + Dashboard~~ — Code da; App oder `dashboard/server.py`
+8. Gerät 2–5: Zugehörigkeit, Display vs. `/16`, dann in der UI bestätigen
+9. ~~Lokale App~~ — Code da ([12-app.md](hci-logs/12-app.md)); Live-GATT am Gerät offen
 
 **Nicht** als Nächstes `0x18`/`0x04`, SQLite, Alarme.
