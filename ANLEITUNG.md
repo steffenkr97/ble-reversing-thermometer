@@ -9,49 +9,24 @@ Live 2026-09-03: Display **= Roh** (`temp_c=25.125` genau die Anzeige). Hum unge
 
 ---
 
-## 0. Einmal: venv
+## 0. Einmal: Rust
 
-Im Repo-Ordner, PowerShell:
-
-```
-python -m venv .venv
-```
+Im Repo-Ordner: Rust **1.85+** (siehe `rust-toolchain.toml`).
 
 ```
-.\.venv\Scripts\Activate.ps1
-```
-
-Falls Activate blockiert:
-
-```
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+cargo test
 ```
 
 ```
-.\.venv\Scripts\Activate.ps1
+cargo run --bin scan-live -- --help
 ```
 
-Prompt muss `(.venv)` zeigen, dann:
+`--help` muss die Flags zeigen. BLE (Scan/GATT) braucht BlueZ auf Linux bzw. CoreBluetooth auf macOS.
+
+History aus den Captures (Schritt 6) braucht **kein** Bluetooth:
 
 ```
-python -m pip install -U pip
-```
-
-```
-pip install -r requirements.txt
-```
-
-```
-python collector/scan_live.py --help
-```
-
-`--help` muss die Flags zeigen, nicht `No module named 'bleak'`.  
-`.venv` nicht committen.
-
-History aus den Captures (Schritt 6) braucht **kein** bleak:
-
-```
-python collector/dump_history.py --help
+cargo run --bin dump-history -- --help
 ```
 
 ---
@@ -69,13 +44,13 @@ Aufschreiben:
 ## 2. Ein Scan, kein CSV
 
 ```
-python collector/scan_live.py --timeout 15
+cargo run --bin scan-live -- --timeout 15
 ```
 
 Kein Treffer? Dann:
 
 ```
-python collector/scan_live.py --timeout 30
+cargo run --bin scan-live -- --timeout 30
 ```
 
 ### Ausgabe lesen
@@ -110,7 +85,7 @@ Dann: Gerät näher, Bluetooth neu, App zu, Timeout 30. Unter Windows fehlt Manu
 Scan 2026-09-03 ist durch (MAC, Temp, Hum passen). Büro-MVP in einem Rutsch:
 
 ```
-python collector/mvp_buero.py --address f4:db:00:00:00:d9
+cargo run --bin mvp-buero -- --address f4:db:00:00:00:d9
 ```
 
 Das schreibt Live-CSV, holt History per GATT, vergleicht die neueste Page mit ADV und hängt `data/interval_evidence.jsonl` an. Zweiter Lauf (später, anderer Count) prüft die 10-min-Hypothese. Nicht senden: `0x18` / `0x04`.
@@ -122,13 +97,13 @@ Oder die Schritte einzeln:
 Nur Büro:
 
 ```
-python collector/collect.py --mac f4:db:00:00:00:d9
+cargo run --bin collect -- --mac f4:db:00:00:00:d9
 ```
 
 Alle Allowlist-MACs (ein Sample je Treffer, je eigene CSV):
 
 ```
-python collector/collect.py
+cargo run --bin collect --
 ```
 
 ### Ausgabe lesen
@@ -159,7 +134,7 @@ Timeout: dieselbe Meldung wie beim Scan, Exit 1, **keine** Messzeile.
 ## 4. Optional: alle 60 s sammeln
 
 ```
-python collector/collect.py --interval 60
+cargo run --bin collect -- --interval 60
 ```
 
 Strg+C beendet (Exit 0).  
@@ -169,10 +144,10 @@ Timeout im Loop: nur Meldung auf stderr, Skript läuft weiter.
 
 ## 5. Dashboard (lokal, kein BLE)
 
-Kein venv/bleak nötig. Im Repo-Ordner:
+Kein extra BLE-Stack nötig. Im Repo-Ordner:
 
 ```
-python dashboard/server.py
+cargo run --bin dashboard
 ```
 
 Browser: `http://127.0.0.1:8765/`
@@ -187,14 +162,14 @@ Details: [hci-logs/09-dashboard.md](hci-logs/09-dashboard.md), [hci-logs/11-room
 
 Die Geräte speichern den Verlauf intern (Hersteller: bis ~100 Tage; in den Nov-2025-Captures **1586 Samples**, ≈ 11 Tage bei 10-min-Hypothese). Das schreibt die App per GATT `07` raus. Ohne Gerät geht derselbe Dump aus den HCI-Logs:
 
-Kein venv/bleak nötig:
+Kein Bluetooth nötig:
 
 ```
-python collector/dump_history.py --help
+cargo run --bin dump-history -- --help
 ```
 
 ```
-python collector/dump_history.py --from-extract hci-logs/extract --all-rooms
+cargo run --bin dump-history -- --from-extract hci-logs/extract --all-rooms
 ```
 
 schreibt History-CSV je MAC, für die der Extract `07`-Pages hat (in den Captures nur Büro).
@@ -233,8 +208,8 @@ Keine Zeilen / Exit 1: Extract-Pfad prüfen (`hci-logs/extract/att_fff5_fff3.csv
 Optional:
 
 ```
-python collector/dump_history.py --from-extract hci-logs/extract --no-timestamps
-python collector/dump_history.py --from-extract hci-logs/extract --output PATH
+cargo run --bin dump-history -- --from-extract hci-logs/extract --no-timestamps
+cargo run --bin dump-history -- --from-extract hci-logs/extract --output PATH
 ```
 
 Protokoll und Intervall: [hci-logs/10-history-dump.md](hci-logs/10-history-dump.md).
@@ -245,16 +220,16 @@ Dashboard neu laden (Schritt 5). Tab **History-CSV (1586)**. X-Achse ist die abg
 
 ## 7. History vom Gerät (GATT)
 
-Hersteller-App **nicht** verbunden. venv wie in Schritt 0 (`bleak` muss da sein). Linux setzt CCCD zuverlässiger als macOS.
+Hersteller-App **nicht** verbunden. Rust wie in Schritt 0 (`btleplug` / BlueZ). Linux setzt CCCD zuverlässiger als macOS.
 
 ```
-python collector/dump_history.py --address f4:db:00:00:00:d9
+cargo run --bin dump-history -- --address f4:db:00:00:00:d9
 ```
 
 Ohne MAC, Ziel nur über System ID `D9 00 00 00 00 00 DB F4`:
 
 ```
-python collector/dump_history.py --use-system-id
+cargo run --bin dump-history -- --use-system-id
 ```
 
 ### Was passiert
@@ -290,7 +265,7 @@ Neueste Page grob gegen ein Live-ADV (Schritt 2) halten: Temp `/16` sollte in de
 Nur die ersten Pages (Test):
 
 ```
-python collector/dump_history.py --address f4:db:00:00:00:d9 --max-pages 2
+cargo run --bin dump-history -- --address f4:db:00:00:00:d9 --max-pages 2
 ```
 
 Eine einzelne Page ohne CSV: Schritt 8.
@@ -304,10 +279,10 @@ Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. Kein 1-Byte-`07`.
 Nur Count oder eine History-Page, keine CSV:
 
 ```
-python collector/read_thermometer_data.py --address f4:db:00:00:00:d9
-python collector/read_thermometer_data.py --address f4:db:00:00:00:d9 --history 0
+cargo run --bin read-thermometer -- --address f4:db:00:00:00:d9
+cargo run --bin read-thermometer -- --address f4:db:00:00:00:d9 --history 0
 ```
 
-`--history 0` = älteste Page (`count=03`). Volle History bleibt `dump_history.py`.
+`--history 0` = älteste Page (`count=03`). Volle History bleibt `dump-history`.
 
 Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.

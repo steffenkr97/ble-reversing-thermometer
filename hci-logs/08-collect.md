@@ -2,35 +2,31 @@
 
 **Gerät:** `f4:db:00:00:00:d9`  
 **Encoding-Beleg:** [03-advertising.md](03-advertising.md), [06-encoding.md](06-encoding.md), [07-read.md](07-read.md)  
-**Code:** `collector/collect.py`, `collector/thermo_store.py` (Scan über `collector/scan_live.py`, Parser `collector/thermo_parse.py`, Allowlist `collector/thermo_rooms.py`)  
-**Tests:** `python -m unittest discover -s collector -p "test_*.py"`
+**Code:** `src/collect.rs`, `src/store.rs`, `src/scan.rs`, `src/parse.rs`, `src/rooms.rs`  
+**Tests:** `cargo test --test collect --test store --test parse --test rooms`
 
-Phase-4-Code ist im Repo. ADV-Scan am Büro-Gerät ist durch ([07-read.md](07-read.md)); `collect.py` → CSV noch nicht.
+Phase-4-Code ist im Repo. ADV-Scan am Büro-Gerät ist durch ([07-read.md](07-read.md)); `collect` → CSV noch nicht.
 
-`collector/collect.py` sammelt Live-Werte **nur über ADV_IND** (kein Connect, kein GATT-Kick). Filter ist die Allowlist in `dashboard/rooms.json` (Payload-MAC), nicht der Gerätename. Ohne `--mac` ein Sample je Allowlist-Treffer in die jeweilige CSV. GATT-Probe bleibt `read_thermometer_data.py`. Der Collector verbindet nicht und schreibt nicht auf `FFF5`.
+`collect` sammelt Live-Werte **nur über ADV_IND** (kein Connect, kein GATT-Kick). Filter ist die Allowlist in `dashboard/rooms.json` (Payload-MAC), nicht der Gerätename. Ohne `--mac` ein Sample je Allowlist-Treffer in die jeweilige CSV. GATT-Probe bleibt `read-thermometer`. Der Collector verbindet nicht und schreibt nicht auf `FFF5`.
 
 ## Abhängigkeit
 
-`requirements.txt`: `bleak>=0.21.0`.
-
-`collect.py` importiert `scan_live`, das `bleak` **oben** lädt. Ohne das Paket scheitert schon `--help`:
+Rust 1.85+, `btleplug` für den Scan. Parser und CSV-Schreiben brauchen kein Bluetooth.
 
 ```
-ModuleNotFoundError: No module named 'bleak'
+cargo run --bin collect -- --help
 ```
-
-`thermo_store` und `thermo_parse` brauchen kein bleak. Die Unittests stubben bleak, falls es fehlt. Syntax: `python -m py_compile collector/collect.py collector/thermo_store.py collector/scan_live.py collector/thermo_parse.py` ist ok. Ohne bleak scheitert `python collector/collect.py --help` (`ModuleNotFoundError: No module named 'bleak'`).
 
 ## CLI
 
 ```
-python collector/collect.py
-python collector/collect.py --mac f4:db:00:00:00:d9
-python collector/collect.py --once
-python collector/collect.py --interval 60
-python collector/collect.py --timeout 15 --outdir data
-python collector/collect.py --output PATH --mac f4:db:00:00:00:d9
-python collector/collect.py --address f4:db:00:00:00:d9
+cargo run --bin collect --
+cargo run --bin collect -- --mac f4:db:00:00:00:d9
+cargo run --bin collect -- --once
+cargo run --bin collect -- --interval 60
+cargo run --bin collect -- --timeout 15 --outdir data
+cargo run --bin collect -- --output PATH --mac f4:db:00:00:00:d9
+cargo run --bin collect -- --address f4:db:00:00:00:d9
 ```
 
 | Flag | Bedeutung |
@@ -97,10 +93,10 @@ Der Collector schreibt **nicht** auf `FFF5`. Blacklist unverändert — nicht se
 
 `04` / `05` / `18` / `19` / `0F` / `F3`
 
-Details: [04-opcodes.md](04-opcodes.md). GATT-Reads (`1A` / `01` / `07`) bleiben in `read_thermometer_data.py`.
+Details: [04-opcodes.md](04-opcodes.md). GATT-Reads (`1A` / `01` / `07`) bleiben in `read-thermometer`.
 
 ## Live-Ergebnis
 
 ADV-Scan am Büro-Gerät ist durch ([07-read.md](07-read.md)): Display **25,125 °C = Roh `/16`**, Hum ±3 %, MAC stimmt. **Kein +10** am 2026-09-03.
 
-`collect.py` → CSV ist **noch nicht am Büro gelaufen**. Feldlauf: `python collector/mvp_buero.py` oder `collect.py --mac f4:db:00:00:00:d9`. Allowlist: [11-rooms.md](11-rooms.md).
+`collect` → CSV ist **noch nicht am Büro gelaufen**. Feldlauf: `cargo run --bin mvp-buero -- --address f4:db:00:00:00:d9` oder `cargo run --bin collect -- --mac f4:db:00:00:00:d9`. Allowlist: [11-rooms.md](11-rooms.md).

@@ -4,7 +4,7 @@
 
 Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 00 DB F4`.
 
-**Aktuelle Phase:** Phase 7 Allowlist in `rooms.json` (Büro bestätigt, 4 Kandidaten). Collector je MAC. Büro-MVP-Feldlauf: `mvp_buero.py`. Nicht `0x18`/`0x04`.
+**Aktuelle Phase:** Phase 7 Allowlist in `rooms.json` (Büro bestätigt, 4 Kandidaten). Collector je MAC. Büro-MVP-Feldlauf: `mvp-buero`. Nicht `0x18`/`0x04`.
 
 ---
 
@@ -19,10 +19,10 @@ Erstes Gerät (Protokoll-Beleg): `f4:db:00:00:00:d9`, System ID `D9 00 00 00 00 
 | HCI-Capture der offiziellen App | erledigt (`hci-logs/*.cfa`, [01-sessions.md](hci-logs/01-sessions.md)) |
 | Encoding von °C / %rF | `/16`; Live: Temp = Display 25,125 °C; Hum ±3 %; Capture Nov 2025 hatte +10 |
 | Collector mit Speichern | Code: Allowlist je MAC; ADV-Scan live OK; CSV-Lauf am Büro noch offen |
-| Lokales Dashboard | Code da (`dashboard/server.py`); 5 Raumkarten, 4 Kandidaten |
+| Lokales Dashboard | Code da (`cargo run --bin dashboard`); 5 Raumkarten, 4 Kandidaten |
 | History-Dump / 5 Geräte | Dump-CLI + Extract 1586 Samples + `--all-rooms`; Live-GATT und Display-Check 2–5 offen |
 
-Live-CSV = `collect.py` über ADV (kein GATT). GATT-Probe bleibt `read_thermometer_data.py`. `fuzzer.py` nur für bereits beobachtete Kommandos; Blacklist `0x04`, `0x05`, `0xFF`, `0xFE` bleibt unangetastet.
+Live-CSV = `collect` über ADV (kein GATT). GATT-Probe bleibt `read-thermometer`. `py/fuzzer.py` nur für bereits beobachtete Kommandos; Blacklist `0x04`, `0x05`, `0xFF`, `0xFE` bleibt unangetastet.
 
 ---
 
@@ -55,9 +55,9 @@ Captures lagen bereits unter `hci-logs/` (nicht `research-device/hci/`). Auswert
 
 ## Phase 3 — Reproduzierbares Read
 
-- [x] Parser Rohbytes → `temp_c` / `humidity_rh` (`collector/thermo_parse.py`, Unittest `collector/test_thermo_parse.py`, 11 Tests)
-- [x] ADV-Scan CLI `collector/scan_live.py` — Live 2026-09-03: Display = Roh 25,125 °C, Hum ±3 %
-- [x] GATT-Probe in `collector/read_thermometer_data.py`: `--address`, `--use-system-id`, `--history INDEX`, `--debug-only`. Sequenz CCCD + `1A` + `01` + optional eine `07`-Page. Kein `--kick`, kein Erstes-Gerät-Fallback. (Code; Live-GATT offen)
+- [x] Parser Rohbytes → `temp_c` / `humidity_rh` (`src/parse.rs`, Tests `tests/parse.rs`, 11 Tests)
+- [x] ADV-Scan CLI `scan-live` — Live 2026-09-03: Display = Roh 25,125 °C, Hum ±3 %
+- [x] GATT-Probe in `read-thermometer`: `--address`, `--use-system-id`, `--history INDEX`, `--debug-only`. Sequenz CCCD + `1A` + `01` + optional eine `07`-Page. Kein `--kick`, kein Erstes-Gerät-Fallback. (Code; Live-GATT offen)
 - [x] Gegen Display live gegenprüfen (ADV): 2026-09-03, kein +10, [07-read.md](hci-logs/07-read.md)
 
 Gerät über MAC / System ID und die Parser-Funktion sind **im Code** erledigt. Aufrufe, API, Goldvektoren: [hci-logs/07-read.md](hci-logs/07-read.md).
@@ -68,7 +68,7 @@ Gerät über MAC / System ID und die Parser-Funktion sind **im Code** erledigt. 
 
 ## Phase 4 — Collector-Skript
 
-`collector/collect.py` sammelt Live-Werte **nur über ADV_IND** (kein Connect, kein GATT-Kick). Stack: Python 3.8+, `bleak>=0.21.0`. Details: [hci-logs/08-collect.md](hci-logs/08-collect.md).
+`collect` sammelt Live-Werte **nur über ADV_IND** (kein Connect, kein GATT-Kick). Stack: Rust 1.85+, `btleplug`. Details: [hci-logs/08-collect.md](hci-logs/08-collect.md).
 
 - [x] Gerät finden über ADV/Payload-MAC (`scan_live`, `TARGET_MAC`) — kein GATT-Kick für Live
 - [x] Messpunkt mit Zeitstempel ISO-8601 UTC (`…Z`)
@@ -77,7 +77,7 @@ Gerät über MAC / System ID und die Parser-Funktion sind **im Code** erledigt. 
 - [x] Timeout: `--once` Exit 1; `--interval` loggen und retry
 - [x] Keine Cloud, keine Hersteller-App, keine unbekannten Multi-Byte-Writes
 
-**Done, wenn:** `python collector/collect.py` ohne App Messwerte in eine lokale Datei schreibt. ADV-Scan ist durch; CSV-Lauf bleibt offen.
+**Done, wenn:** `cargo run --bin collect` ohne App Messwerte in eine lokale Datei schreibt. ADV-Scan ist durch; CSV-Lauf bleibt offen.
 
 ---
 
@@ -86,25 +86,25 @@ Gerät über MAC / System ID und die Parser-Funktion sind **im Code** erledigt. 
 - [x] Ausgabepfad `data/thermo_<mac12>_<datum>.csv` (UTC-Tag); Rohhex behalten
 - [x] Eine Zeile = ein Sample; Rohhex in der CSV
 - [x] Spalten, Einheiten, Intervall in [08-collect.md](hci-logs/08-collect.md)
-- [ ] Live-CSV am Büro-Gerät (`collect.py` schreibt erst dann echte Zeilen)
+- [ ] Live-CSV am Büro-Gerät (`collect` schreibt erst dann echte Zeilen)
 - [ ] Optional: JSONL / eine Datei pro Gerät, sobald Live + History zusammen ins Dashboard sollen (Phase 8)
 
 ---
 
 ## Phase 6 — Vergangenheit (History-Dump, ein Gerät)
 
-GATT wie die App: CCCD → `1A` → `01` (Sample-Count) → wiederholte `07`-Pages. Nur beobachtete Writes. Beleg: [05-history-07.md](hci-logs/05-history-07.md), Probe: `read_thermometer_data.py`.
+GATT wie die App: CCCD → `1A` → `01` (Sample-Count) → wiederholte `07`-Pages. Nur beobachtete Writes. Beleg: [05-history-07.md](hci-logs/05-history-07.md), Probe: `read-thermometer`.
 
 History hat **keine Wanduhr** — nur Index (0 = älteste). Zeit fürs Dashboard: `timestamp_inferred` (Hypothese 10 min, [10-history-dump.md](hci-logs/10-history-dump.md)).
 
-- [ ] GATT-Probe live am Büro-Gerät: `python collector/read_thermometer_data.py --address f4:db:00:00:00:d9` (`1A` + `01`, Count notieren)
+- [ ] GATT-Probe live am Büro-Gerät: `cargo run --bin read-thermometer -- --address f4:db:00:00:00:d9` (`1A` + `01`, Count notieren)
 - [ ] Eine Page: `--history 0` (älteste) und eine Page nahe Count (neueste) gegen aktuelles ADV
 - [x] Sample-Intervall ableiten — **Hypothese 10 min** (ADV-Counter 949579 / Count 1583 ≈ 599,86 s). Nicht Fakt, bis zwei Live-Zeitpunkte passen
-- [x] Dump-CLI: `collector/dump_history.py` — alle Pages `07` mit `count=03`, letzte Page ggf. `01`
+- [x] Dump-CLI: `dump-history` — alle Pages `07` mit `count=03`, letzte Page ggf. `01`
 - [x] Speichern `data/history_<mac12>.csv`: `mac, index, record, temp_c, humidity_rh, raw_hex` plus `timestamp_inferred`
 - [x] Unittest gegen Capture-Goldvektoren (`07` count 03/01, Extract 1586 Samples, Page-Plan 1584/1586/820)
-- [x] Extract-Export: `python collector/dump_history.py --from-extract hci-logs/extract` (Capture `15_14_35`, 1586 Samples)
-- [ ] Ein Live-Dump am Büro-Gerät (`dump_history.py --address …`)
+- [x] Extract-Export: `cargo run --bin dump-history -- --from-extract hci-logs/extract` (Capture `15_14_35`, 1586 Samples)
+- [ ] Ein Live-Dump am Büro-Gerät (`dump-history --address …`)
 
 **Done, wenn:** ein vollständiger History-Dump des Büro-Geräts lokal liegt und die neueste Page zum Live-ADV passt. Code + Capture-Export sind da; Live-GATT offen. Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`.
 
@@ -141,9 +141,9 @@ Lokales UI über die Collector-CSV und die HCI-Extracts. Kein BLE. Details: [09-
 
 - [x] Gemeinsames Sample-JSON: Spalten wie Live-CSV plus `source`, `room`, optional `index`
 - [x] Allowlist `dashboard/rooms.json` (Büro confirmed; 4 Kandidaten sichtbar, nicht als eigene Geräte angenommen)
-- [x] Dashboard / Plots (Räume, Verläufe) — `python dashboard/server.py`
+- [x] Dashboard / Plots (Räume, Verläufe) — `cargo run --bin dashboard`
 - [ ] Live-CSV am Büro, damit die Quelle `adv` echte Sammelzeiten hat
-- [x] History-CSV aus Dump/Extract plotbar (`dump_history.py`, Quelle `history`)
+- [x] History-CSV aus Dump/Extract plotbar (`dump-history`, Quelle `history`)
 - [ ] Optional JSONL / SQLite — **Parkplatz** (nicht Release 6.1/7)
 
 **Done, wenn:** Live- und History-Dateien ohne Extra-Parsing plotbar sind. UI und History-CSV-Import sind da; Live-CSV und Live-GATT-Dump am Gerät fehlen noch.
@@ -178,10 +178,10 @@ Bewusst nicht bauen, bis 5 bestätigte Räume wehtun oder ein Kalibrier-Test ans
 2. ~~`FFF5`/`FFF3`-Paare und Encoding~~ — erledigt, [06-encoding.md](hci-logs/06-encoding.md)
 3. ~~Parser + ADV-CLI + GATT-Probe (Code)~~ — erledigt, [07-read.md](hci-logs/07-read.md)
 4. ~~Collector ADV→CSV (Code)~~ — erledigt, [08-collect.md](hci-logs/08-collect.md)
-5. ~~Live-ADV `scan_live.py`~~ — erledigt 2026-09-03, Display = Roh 25,125 °C, [07-read.md](hci-logs/07-read.md)
-6. **Feld Büro-MVP:** `python collector/mvp_buero.py --address f4:db:00:00:00:d9` (Live-CSV + GATT-Dump + Vergleich + Evidence)
-7. ~~Extract-History + Dashboard~~ — Code da; `dump_history.py --from-extract` / `dashboard/server.py`
+5. ~~Live-ADV `scan-live`~~ — erledigt 2026-09-03, Display = Roh 25,125 °C, [07-read.md](hci-logs/07-read.md)
+6. **Feld Büro-MVP:** `cargo run --bin mvp-buero -- --address f4:db:00:00:00:d9` (Live-CSV + GATT-Dump + Vergleich + Evidence)
+7. ~~Extract-History + Dashboard~~ — Code da; `dump-history --from-extract` / `cargo run --bin dashboard`
 8. Gerät 2–5: Zugehörigkeit, Display vs. `/16`, dann `confirmed`/`encoding_checked` in `rooms.json`
-9. `dump_history.py --address …` je bestätigter MAC (oder `--all-rooms`)
+9. `dump-history --address …` je bestätigter MAC (oder `--all-rooms`)
 
 **Nicht** als Nächstes `0x18`/`0x04`, SQLite, Alarme.

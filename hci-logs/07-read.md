@@ -2,31 +2,28 @@
 
 **Gerät:** `f4:db:00:00:00:d9`  
 **Encoding-Beleg:** [03-advertising.md](03-advertising.md), [06-encoding.md](06-encoding.md)  
-**Code:** `collector/thermo_parse.py`, `collector/scan_live.py`, `collector/read_thermometer_data.py`  
-**Tests:** `collector/test_thermo_parse.py` (11 Tests, Unittest)
+**Code:** `src/parse.rs`, `src/scan.rs`, `src/ble.rs`, Binaries `scan-live` / `read-thermometer`  
+**Tests:** `cargo test --test parse` (Goldvektoren wie `collector/test_thermo_parse.py`)
 
 Phase-3-Code ist im Repo. ADV-Live am Büro-Gerät: [unten](#live-ergebnis). GATT-Probe und Collector-CSV noch offen.
 
 ## Abhängigkeit
 
-`requirements.txt`: `bleak>=0.21.0`.
-
-Beide CLIs importieren `bleak` **oben**. Ohne das Paket scheitert schon `--help`:
+Rust **1.85+** (`rust-toolchain.toml`), `btleplug` für Scan/GATT. Parser und `--from-extract` brauchen kein Bluetooth.
 
 ```
-ModuleNotFoundError: No module named 'bleak'
+cargo test --test parse
+cargo run --bin scan-live -- --help
 ```
-
-`thermo_parse` braucht kein bleak. Syntax: `python -m py_compile collector/scan_live.py collector/read_thermometer_data.py collector/thermo_parse.py` ist ok.
 
 ## CLI
 
 ### ADV-Scan (kein Connect)
 
 ```
-python collector/scan_live.py
-python collector/scan_live.py --timeout 15
-python collector/scan_live.py --address f4:db:00:00:00:d9
+cargo run --bin scan-live --
+cargo run --bin scan-live -- --timeout 15
+cargo run --bin scan-live -- --address f4:db:00:00:00:d9
 ```
 
 | Flag | Bedeutung |
@@ -34,17 +31,17 @@ python collector/scan_live.py --address f4:db:00:00:00:d9
 | `--timeout SEK` | Scan-Timeout, Standard 15 |
 | `--address ADDR` | zusätzlich `device.address` (Linux/Windows: MAC, macOS: UUID). Die MAC **im Manufacturer-Payload** bleibt Pflicht (`TARGET_MAC`). |
 
-Nur Advertising. Manufacturer 20 Byte: bleak liefert oft 18 Byte nach Company-ID `0x001B`, manchmal schon 20 Byte inkl. `1B 00`. `assemble_mfg_frame` baut daraus den 20-Byte-Frame, dann `parse_adv_manufacturer`. Erstes gültiges Sample auf stdout, Exit 0.
+Nur Advertising. Manufacturer 20 Byte: btleplug/bleak liefern oft 18 Byte nach Company-ID `0x001B`, manchmal schon 20 Byte inkl. `1B 00`. `assemble_mfg_frame` baut daraus den 20-Byte-Frame, dann `parse_adv_manufacturer`. Erstes gültiges Sample auf stdout, Exit 0.
 
 Filter ist die Payload-MAC, nicht der Gerätename. 22-Byte-Min/Max und fremde MAC → kein Treffer.
 
 ### GATT-Probe
 
 ```
-python collector/read_thermometer_data.py --address f4:db:00:00:00:d9
-python collector/read_thermometer_data.py --use-system-id
-python collector/read_thermometer_data.py --address f4:db:00:00:00:d9 --history 0
-python collector/read_thermometer_data.py --debug-only --address f4:db:00:00:00:d9
+cargo run --bin read-thermometer -- --address f4:db:00:00:00:d9
+cargo run --bin read-thermometer -- --use-system-id
+cargo run --bin read-thermometer -- --address f4:db:00:00:00:d9 --history 0
+cargo run --bin read-thermometer -- --debug-only --address f4:db:00:00:00:d9
 ```
 
 | Flag | Bedeutung |
@@ -157,7 +154,7 @@ Die CLIs schreiben nur `1A`, `01` und optional `07`. Details: [04-opcodes.md](04
 **ADV-Scan gelaufen** (Windows, `(.venv)`, 2026-09-03):
 
 ```
-python collector/scan_live.py --timeout 15
+cargo run --bin scan-live -- --timeout 15
 ```
 
 ```
@@ -174,4 +171,4 @@ temp_c=25.125 humidity_rh=62.0625 battery_mv=2617 counter=2025968 mac=f4:db:00:0
 
 Nov-2025-Captures: Display 33 °C bei Offset **+10** (Roh ~22 °C). Am 2026-09-03 zeigt das Display den Rohwert. Offset ist also ein Gerätezustand, nicht fest im Encoding. `0x18`/`0x04` nicht zuordnen, nicht senden.
 
-GATT-Probe und `collect.py`→CSV: noch nicht gelaufen. Encoding: [06-encoding.md](06-encoding.md).
+GATT-Probe und `collect`→CSV: noch nicht gelaufen. Encoding: [06-encoding.md](06-encoding.md).

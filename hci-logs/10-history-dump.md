@@ -1,8 +1,8 @@
 # Phase 6 — History-Dump (GATT `07` / HCI-Extract)
 
 **Gerät:** `f4:db:00:00:00:d9`  
-**Code:** `collector/thermo_history.py`, `collector/dump_history.py`  
-**Tests:** `python -m unittest discover -s collector -p "test_*.py"` (History-Tests in `test_thermo_history.py`, `test_dump_history.py`)  
+**Code:** `src/history.rs`, `src/dump.rs`, Binary `dump-history`  
+**Tests:** `cargo test --test history --test dump_history`  
 **Framing:** [05-history-07.md](05-history-07.md), Encoding `/16`: [06-encoding.md](06-encoding.md)
 
 Vollständigen Verlauf lokal speichern, wie die App: CCCD → Write `1A` → `01` (Sample-Count) → wiederholte `07`-Pages. Dashboard liest `data/history_<mac12>.csv` als Quelle `history`.
@@ -11,18 +11,18 @@ Live-GATT am Büro-Gerät ist **Code bereit**, in dieser Umgebung nicht gelaufen
 
 ## CLI
 
-Ohne bleak (nur Lesen der Extracts):
+Ohne Bluetooth (nur Lesen der Extracts):
 
 ```
-python collector/dump_history.py --from-extract hci-logs/extract
-python collector/dump_history.py --from-extract hci-logs/extract --all-rooms
+cargo run --bin dump-history -- --from-extract hci-logs/extract
+cargo run --bin dump-history -- --from-extract hci-logs/extract --all-rooms
 ```
 
-Am Gerät (venv, bleak):
+Am Gerät (`btleplug` / BlueZ):
 
 ```
-python collector/dump_history.py --address f4:db:00:00:00:d9
-python collector/dump_history.py --use-system-id
+cargo run --bin dump-history -- --address f4:db:00:00:00:d9
+cargo run --bin dump-history -- --use-system-id
 ```
 
 | Flag | Bedeutung |
@@ -43,7 +43,7 @@ python collector/dump_history.py --use-system-id
 
 `--all-rooms` schreibt je MAC in `rooms.json` eine History-CSV, sofern Pages existieren. In den Nov-2025-Captures nur Büro.
 
-`--help` braucht kein bleak. Schritt-für-Schritt: [ANLEITUNG.md](../ANLEITUNG.md). Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. `07`-Writes nur 6 Byte, `count` nur `01` oder `03` — nie `02`. GATT-System-ID nur gegen den Sollwert in `rooms.json` (Büro), nicht die Büro-`2A23` auf andere MACs.
+`--help` braucht kein Bluetooth. Schritt-für-Schritt: [ANLEITUNG.md](../ANLEITUNG.md). Nicht senden: `04` / `05` / `18` / `19` / `0F` / `F3`. `07`-Writes nur 6 Byte, `count` nur `01` oder `03` — nie `02`. GATT-System-ID nur gegen den Sollwert in `rooms.json` (Büro), nicht die Büro-`2A23` auf andere MACs.
 
 ## Ablauf Live (Fakt aus Captures)
 
@@ -97,7 +97,7 @@ Hersteller „bis 100 Tage“: bei 10 min wären das 14400 Samples (`uint16` rei
 
 ## Dashboard
 
-`python dashboard/server.py` — Tab **History-CSV**, sobald `data/history_*.csv` existiert. Mit `timestamp_inferred` ist die X-Achse die abgeleitete Zeit; ohne bleibt der Index. Quelle `history_capture` nutzt weiter den Index (Capture-Zeit = Dump-Zeit).
+`cargo run --bin dashboard` — Tab **History-CSV**, sobald `data/history_*.csv` existiert. Mit `timestamp_inferred` ist die X-Achse die abgeleitete Zeit; ohne bleibt der Index. Quelle `history_capture` nutzt weiter den Index (Capture-Zeit = Dump-Zeit).
 
 ## Nicht
 

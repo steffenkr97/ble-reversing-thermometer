@@ -1,8 +1,8 @@
 # Phase 7 — Fünf Räume (Allowlist)
 
 **Geräteliste:** [`dashboard/rooms.json`](../dashboard/rooms.json)  
-**Code:** `collector/thermo_rooms.py`, `collector/collect.py`, `collector/scan_live.py`, `collector/dump_history.py --all-rooms`, Dashboard-Raumkarten  
-**Tests:** `python -m unittest discover -s collector -p "test_*.py"` und `discover -s dashboard`
+**Code:** `src/rooms.rs`, `src/collect.rs`, `src/scan.rs`, `dump-history --all-rooms`, Dashboard-Raumkarten  
+**Tests:** `cargo test --test rooms --test collect --test dash`
 
 Kein „erstes ThermoBeacon“. Live und History nur für MACs in `rooms.json`. Fremde Geräte in Reichweite werden ignoriert.
 
@@ -32,23 +32,23 @@ Nach Display-Check: `confirmed` und `encoding_checked` auf `true` setzen, `name`
 
 ## Collector
 
-`python collector/collect.py` scannt **alle** Allowlist-MACs in einem Fenster, schreibt `data/thermo_<mac12>_<datum>.csv` je Treffer. Fehlende MACs stehen auf stderr, Exit 0 sobald mindestens ein Sample da ist.
+`cargo run --bin collect --` scannt **alle** Allowlist-MACs in einem Fenster, schreibt `data/thermo_<mac12>_<datum>.csv` je Treffer. Fehlende MACs stehen auf stderr, Exit 0 sobald mindestens ein Sample da ist.
 
 Nur Büro:
 
 ```
-python collector/collect.py --mac f4:db:00:00:00:d9
+cargo run --bin collect -- --mac f4:db:00:00:00:d9
 ```
 
 `--output` braucht genau ein `--mac`. Parser: `parse_adv_manufacturer(..., allowed_macs=Allowlist)`. Ohne Allowlist bleibt das Default-Verhalten nur Büro (HCI-Beleg).
 
-`scan_live.py` CLI bleibt standardmäßig Büro (`--mac` Default). `--rooms` prüft, dass die MAC in der Liste steht.
+`scan-live` CLI bleibt standardmäßig Büro (`--mac` Default). `--rooms` prüft, dass die MAC in der Liste steht.
 
 ## History je MAC
 
 ```
-python collector/dump_history.py --address f4:db:00:00:00:d9
-python collector/dump_history.py --from-extract hci-logs/extract --all-rooms
+cargo run --bin dump-history -- --address f4:db:00:00:00:d9
+cargo run --bin dump-history -- --from-extract hci-logs/extract --all-rooms
 ```
 
 `--all-rooms` schreibt je vorhandener Extract-/GATT-History `data/history_<mac12>.csv`. In den Nov-2025-Captures hat nur das Büro `07`-Pages — andere MACs werden übersprungen, kein Fehler wenn mindestens eine Datei entsteht.
@@ -66,7 +66,7 @@ Raumkarten für jeden Eintrag. Kandidaten (`confirmed=false`) gestrichelt, Hinwe
 Feldlauf, kein neues Opcode:
 
 ```
-python collector/mvp_buero.py --address f4:db:00:00:00:d9
+cargo run --bin mvp-buero -- --address f4:db:00:00:00:d9
 ```
 
 1. Live-CSV ADV  

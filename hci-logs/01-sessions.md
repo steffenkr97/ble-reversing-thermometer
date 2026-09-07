@@ -48,7 +48,7 @@ Zusätzlich Hue-Lampen und unbenannte BLE-Geräte. Filter immer auf `f4:db:00:00
 ## Parser
 
 ```text
-python collector/parse_btsnoop.py --summary --export hci-logs/extract
+cargo run --bin parse-btsnoop -- --summary --export hci-logs/extract
 ```
 
 Skript liest nur Dateien, schreibt nicht aufs Gerät, ändert keine `.cfa`.

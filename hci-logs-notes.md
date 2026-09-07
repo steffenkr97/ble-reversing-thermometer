@@ -2,7 +2,7 @@
 
 Kalibrier-Test (Nov 2025, Captures): Display auf **33 °C** gesetzt = Offset **+10**. Rohwert sollte ~23 °C entsprechen. Luftfeuchtigkeit wurde damals nicht notiert.
 
-Live 2026-09-03: `scan_live.py` → Display **25,125 °C = Roh `/16`**, Hum ±3 %. Kein +10. Collector-CSV am Gerät noch offen (`mvp_buero.py`). [hci-logs/07-read.md](hci-logs/07-read.md).
+Live 2026-09-03: `scan-live` → Display **25,125 °C = Roh `/16`**, Hum ±3 %. Kein +10. Collector-CSV am Gerät noch offen (`mvp-buero`). [hci-logs/07-read.md](hci-logs/07-read.md).
 
 Captures liegen unter `hci-logs/*.cfa` (Android-btsnoop, OnePlus 5T), nicht unter `research-device/hci/`.
 
@@ -16,9 +16,9 @@ Captures liegen unter `hci-logs/*.cfa` (Android-btsnoop, OnePlus 5T), nicht unte
 | [04-opcodes.md](hci-logs/04-opcodes.md) | Histogram, `04`/`18`/`05`/`0F`/`19`, Fuzzer vs. App |
 | [05-history-07.md](hci-logs/05-history-07.md) | History-Page, `/16`, Ende `00 00` |
 | [06-encoding.md](hci-logs/06-encoding.md) | Phase 2: Paare, Payloads, Skala `/16` gegen Display |
-| [07-read.md](hci-logs/07-read.md) | Phase 3: Parser, `scan_live.py`, GATT-Probe; ADV-Live 2026-09-03 |
-| [08-collect.md](hci-logs/08-collect.md) | Phase 4: ADV-Collector `collect.py` → CSV; CSV-Lauf noch offen |
+| [07-read.md](hci-logs/07-read.md) | Phase 3: Parser, `scan-live`, GATT-Probe; ADV-Live 2026-09-03 |
+| [08-collect.md](hci-logs/08-collect.md) | Phase 4: ADV-Collector `collect` → CSV; CSV-Lauf noch offen |
 | [09-dashboard.md](hci-logs/09-dashboard.md) | Lokales Dashboard (CSV + HCI-Beleg), kein BLE |
 | [10-history-dump.md](hci-logs/10-history-dump.md) | Phase 6: History-Dump, Extract-Export, Intervall-Hypothese 10 min |
 | [11-rooms.md](hci-logs/11-rooms.md) | Phase 7: Allowlist 5 Räume, Collector je MAC, Büro-MVP-CLI |
-| [extract/](hci-logs/extract/) | CSV-Rohdumps aus `collector/parse_btsnoop.py` (inkl. `pairs.csv`) |
+| [extract/](hci-logs/extract/) | CSV-Rohdumps aus `parse-btsnoop` (inkl. `pairs.csv`) |

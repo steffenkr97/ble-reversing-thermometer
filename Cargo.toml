@@ -1,0 +1,70 @@
+[package]
+name = "thermobeacon"
+version = "0.7.0"
+edition = "2021"
+description = "ThermoBeacon: Live-ADV und GATT-History lokal, ohne Hersteller-App"
+publish = false
+default-run = "dashboard"
+rust-version = "1.85"
+
+[dependencies]
+anyhow = "1.0.86"
+btleplug = "0.11.7"
+chrono = { version = "0.4.38", default-features = false, features = ["clock", "std"] }
+clap = { version = "=4.5.23", features = ["derive"] }
+csv = "1.3.0"
+futures = "0.3.31"
+hex = "0.4.3"
+regex = "1.11.1"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+thiserror = "1.0.64"
+tiny_http = "0.12.0"
+tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+url = "=2.5.2"
+uuid = { version = "1.11.0", features = ["std"] }
+walkdir = "2.5.0"
+
+[dev-dependencies]
+tempfile = "=3.10.1"
+hex = "0.4.3"
+chrono = { version = "0.4.38", default-features = false, features = ["clock", "std"] }
+tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros", "time"] }
+serde_json = "1.0.128"
+tiny_http = "0.12.0"
+
+[[bin]]
+name = "scan-live"
+path = "src/bin/scan_live.rs"
+
+[[bin]]
+name = "collect"
+path = "src/bin/collect.rs"
+
+[[bin]]
+name = "dump-history"
+path = "src/bin/dump_history.rs"
+
+[[bin]]
+name = "read-thermometer"
+path = "src/bin/read_thermometer.rs"
+
+[[bin]]
+name = "mvp-buero"
+path = "src/bin/mvp_buero.rs"
+
+[[bin]]
+name = "dashboard"
+path = "src/bin/dashboard.rs"
+
+[[bin]]
+name = "parse-btsnoop"
+path = "src/bin/parse_btsnoop.rs"
+
+[[bin]]
+name = "list-system-ids"
+path = "src/bin/list_system_ids.rs"
+
+[[bin]]
+name = "scan-devices"
+path = "src/bin/scan_devices.rs"

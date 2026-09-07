@@ -1,18 +1,18 @@
 # Phase 8 — Lokales Dashboard (CSV + HCI-Beleg)
 
 **Gerät (Allowlist):** `f4:db:00:00:00:d9` (Büro)  
-**Code:** `dashboard/server.py`, `dashboard/thermo_dash.py`, `dashboard/static/`  
-**Tests:** `python -m unittest discover -s dashboard -p "test_*.py"`  
+**Code:** `src/dash.rs`, `src/http.rs`, Binary `dashboard`, `dashboard/static/`  
+**Tests:** `cargo test --test dash --test http`  
 **Encoding:** unverändert `int16le / 16` ([06-encoding.md](06-encoding.md), [08-collect.md](08-collect.md))
 
 Kein BLE, kein GATT, keine Cloud. Der Server **liest** nur: Live-CSV aus `data/`, optionale History-CSV, und die schon exportierten HCI-Extracts. Es gibt keine Writes auf `FFF5`.
 
 ## Start
 
-Im Repo-Root (kein bleak nötig):
+Im Repo-Root (kein BLE nötig):
 
 ```
-python dashboard/server.py
+cargo run --bin dashboard
 ```
 
 Dann Browser: `http://127.0.0.1:8765/`
@@ -26,7 +26,7 @@ Dann Browser: `http://127.0.0.1:8765/`
 | `--extract-dir DIR` | HCI-CSV, Standard `hci-logs/extract` |
 | `--no-extract` | nur `data/`, keine Capture-Belege |
 
-Ohne Live-CSV (Collector noch nicht gelaufen) zeigt die UI die **HCI-Belege** vom Büro-Gerät: Capture-ADV und History `07`. Sobald `collect.py` schreibt, erscheint die Quelle **Live-CSV (ADV)** zuerst.
+Ohne Live-CSV (Collector noch nicht gelaufen) zeigt die UI die **HCI-Belege** vom Büro-Gerät: Capture-ADV und History `07`. Sobald `collect` schreibt, erscheint die Quelle **Live-CSV (ADV)** zuerst.
 
 ## Allowlist
 
@@ -37,7 +37,7 @@ Ohne Live-CSV (Collector noch nicht gelaufen) zeigt die UI die **HCI-Belege** vo
 | `source` | Datei | X-Achse | Status |
 |----------|-------|---------|--------|
 | `adv` | `data/thermo_<mac12>_<YYYY-MM-DD>.csv` | `timestamp` UTC (Sammelzeit) | Live, sobald Collector läuft |
-| `history` | `data/history_<mac12>.csv` | `timestamp_inferred` wenn gesetzt, sonst `index` | Phase 6: `dump_history.py` (GATT oder `--from-extract`) |
+| `history` | `data/history_<mac12>.csv` | `timestamp_inferred` wenn gesetzt, sonst `index` | Phase 6: `dump-history` (GATT oder `--from-extract`) |
 | `adv_capture` | `hci-logs/extract/adv.csv` | Capture-Zeit | Beleg, nur Allowlist + `parse_adv_manufacturer` |
 | `history_capture` | `hci-logs/extract/att_fff5_fff3.csv` | Sample-Index | Beleg GATT `07`; Duplikate über Captures: erstes Vorkommen pro `(mac, index)` |
 

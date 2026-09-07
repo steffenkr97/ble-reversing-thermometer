@@ -1,3 +1,4 @@
+# Optional: Python-Referenz (collector/, dashboard/). Primär ist das Rust-Crate (`cargo test`).
 bleak>=0.21.0
 
 

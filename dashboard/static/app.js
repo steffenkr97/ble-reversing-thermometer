@@ -10,9 +10,9 @@
   };
 
   var SOURCE_HINTS = {
-    adv: "Sammelzeit UTC aus collect.py. Eine Zeile = ein ADV-Sample.",
+    adv: "Sammelzeit UTC aus collect (cargo run --bin collect). Eine Zeile = ein ADV-Sample.",
     history:
-      "GATT-History-Dump (dump_history.py). Zeit = Hypothese 10 min, sonst Index 0 = älteste.",
+      "GATT-History-Dump (dump-history). Zeit = Hypothese 10 min, sonst Index 0 = älteste.",
     adv_capture: "HCI-Beleg ADV_IND, nur Allowlist. Kein Live-Collector.",
     history_capture:
       "HCI-Beleg GATT 07. Index 0 = älteste. Capture-Zeit ist Dump-Zeit, nicht Gerätezeit.",
@@ -434,7 +434,7 @@
     if (!payload.samples || !payload.samples.length) {
       empty.hidden = false;
       empty.textContent =
-        "Keine Daten für diese Quelle. Live: python collector/collect.py — History: python collector/dump_history.py --from-extract hci-logs/extract";
+        "Keine Daten für diese Quelle. Live: cargo run --bin collect — History: cargo run --bin dump-history -- --from-extract hci-logs/extract";
     } else {
       empty.hidden = true;
     }
@@ -479,6 +479,6 @@
   boot().catch(function (err) {
     $("top-meta").textContent = "API-Fehler: " + err.message;
     $("empty").hidden = false;
-    $("empty").textContent = "Dashboard-API nicht erreichbar. python dashboard/server.py";
+    $("empty").textContent = "Dashboard-API nicht erreichbar. cargo run --bin dashboard";
   });
 })();
